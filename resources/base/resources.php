@@ -22,7 +22,7 @@ class resources {
     public static function listmodules($root='', $path='/', &$modules=[]) {
         if(!is_string($root)) return -1;
         if(empty($root)) $root = REPODIR.DIRECTORY_SEPARATOR.'resources';
-        if(is_array($dir = scandir($root.$path)))
+        if(is_array($dir = @scandir($root.$path)))
           foreach($dir as $item)
             if($item !== '.' && $item !== '..' && ($item[0] ?? '') !== '.')
               if(is_dir(realpath($root.$path.$item))) self::listmodules($root,$path.$item.'/', $modules);

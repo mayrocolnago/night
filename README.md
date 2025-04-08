@@ -76,10 +76,10 @@ If no function is specified, `index()` method is called by default. And if nothi
 
 ### Creating a Basic Route
 
-Create a new PHP file in the `resources` directory:
+Create a new PHP file `test.php` in the `resources` directory:
 
 ```php
-class example {
+class test {
     use \openapi;
 
     public static function index($data=[]) {
@@ -90,17 +90,17 @@ class example {
     }
 
     public static function api($data=[]) {
-        return ["message" => "Hello", "from" => "example", "params" => $data];
+        return ["message" => "Hello", "from" => "test", "params" => $data];
         // This will return a JSON response like:
-        // {"result":3,"data":{"message":"Hello","from":"example","params":{"param":"value"}}}
+        // {"result":3,"data":{"message":"Hello","from":"test","params":{"param":"value"}}}
         // (3 as of the amount of information on `data`. Useful to count results of a database query dump)
     }
 }
 ```
 
 Now you can access:
-- `https://yourdomain.com/example` - Returns HTML "Hello World"
-- `https://yourdomain.com/example/api?param=value` - Returns JSON response
+- `https://yourdomain.com/test` - Returns HTML "Hello World"
+- `https://yourdomain.com/test/api?param=value` - Returns JSON response
 
 No need to configure extra route files or any sort of thing. It all works automaticly.
 
@@ -124,8 +124,13 @@ class api {
         return ["name" => "John", "age" => 30]; // Returns {"result":2,"data":{"name":"John","age":30}}
     }
 
+    public static function test($data=[]) { 
+        return ["result" => 2, "something" => 3]; // Returns {"result":2,"something":3} on result level 
+        //(because there is "result" key on the array)
+    }
+
     public static function params($data=[]) { 
-        return $data; // Returns all parameters passed in the request
+        return $data; // Returns all parameters passed in the request {"result":1,"data":[...data]}
     }
 }
 ```
@@ -149,7 +154,7 @@ The framework automatically formats API responses as JSON with the following str
 - `data`: Contains the data of a result if it is an array or object
 - `elapsed`: Time taken to process the request in seconds
 - `http`: HTTP status code
-- `state`: Always 1 for successful responses
+- `state`: Always 1 for successful connection responses
 
 **result** Parameter followup guide:
 
@@ -185,6 +190,7 @@ Other parameters:
 | state | Default: 1. To identify that the connection was successful with the server/API |
 | header | Identifier for applying `header("Content-Type: application/json")`. Typically null or false if not applied |
 | policy | Identifier for applying `header("Access-Control-Allow-Origin: *")`. Typically null or false if not applied |
+| error | This key will appear as `true` if result has a negative value |
 | page | Current page which the API is filtering the results `?page=1` |
 | data | Data return parameter |
 
@@ -233,6 +239,9 @@ class cart {
     public static $crudTable = "cart";
 
     // Method `create` will be available because of `crud` trait
+    // Along with all others from `crud` trait
+
+    // To limit the available APIs, set: `public static $openapiOnly = ['create','read'];`
     
     public static function js($data=[]) {
         ?><script>
@@ -244,7 +253,7 @@ class cart {
                 /* We can use `post` function from `\globals` module */            
                 post("cart/create",{"product_id":productid},function(data){
                     /* We always check first if there is no errors */
-                    if(!data || !data.result || data.error) return errorhandler(data);
+                    if(!data || data.error) return errorhandler(data);
                     /* Then we do everything we need to do */
                     console.log('Product added to cart',data);
                 },function(error){
@@ -284,7 +293,7 @@ $users = \module::list([":name" => "John%"]);
 // Returns {"result":1, ...} meaning how much rows were deleted
 ```
 
-Using ":" for searching and "|" for `OR` conditioning
+Use ":" for searching and "|" for `OR` conditioning
 
 ### Dynamic Content Loading
 
@@ -300,7 +309,7 @@ class app {
 
     public static function index($data=[]) {
         // This will load all CSS, HTML, and JS from the "app" namespace.
-        exit(\resources::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" */
+        exit(\resources::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
     }
 }
 ```
