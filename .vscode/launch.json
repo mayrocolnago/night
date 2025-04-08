@@ -1,0 +1,53 @@
+{
+    // -- Xdebug (https://xdebug.org) for code-server by @mayrocolnago
+
+    // -- Install Vscode "PHP Debug" Extension from felixfbecker 
+    // https://open-vsx.org/vscode/item?itemName=felixfbecker.php-debug
+
+    // -- Install Xdebug 3.1.5 for Php7.4 (follow instructions below)
+    // wget https://xdebug.org/files/xdebug-3.1.5.tgz -- Download the xdebug-3.1.5.tgz
+    // tar -xzvf xdebug-3.1.5.tgz -- Extract the xdebug-3.1.5.tgz
+    // cd xdebug-3.1.5 && phpize && ./configure && make && make install -- Create xdebug installation files
+    // cp xdebug.so /usr/local/lib/php/extensions/no-debug-non-zts-20190902/ -- Copy the xdebug.so to the php extensions folder
+    // -- (you might wanna check if the no-debug-non-zts-xxxxxxx directory is correct)
+
+    // -- Configure the VirtualHost that runs your project site
+    // /etc/apache2/sites-enabled/wildcard.conf
+    // -- Within the following:
+    // <VirtualHost *:80>
+    // # ... other configurations ...
+    // # Xdebug configuration
+    //   php_value xdebug.mode debug
+    //   php_value xdebug.start_with_request yes
+    //   php_value xdebug.client_host 0.0.0.0
+    //   php_value xdebug.client_port 9003
+    //   php_value xdebug.idekey PHPSTORM
+    // </VirtualHost>
+
+    // -- Configure the php.ini to enable the xdebug extension
+    // /usr/local/etc/php/php.ini
+    // -- Put the following to the end of the file
+    // [xdebug]
+    // zend_extension=/usr/local/lib/php/extensions/no-debug-non-zts-20190902/xdebug.so
+    // xdebug.mode=debug
+    // xdebug.start_with_request=yes
+    // xdebug.client_host=0.0.0.0
+    // xdebug.client_port=9003
+    // xdebug.idekey=PHPSTORM
+
+    // -- Restart the apache
+    // service apache2 restart
+
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Xdebug",
+            "type": "php",
+            "request": "launch",
+            "port": 9003,
+            "pathMappings": {
+                "/var/www/html/${workspaceFolderBasename}": "${workspaceFolder}"
+            }
+        }
+    ]
+}

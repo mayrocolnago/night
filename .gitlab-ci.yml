@@ -1,0 +1,29 @@
+stages:
+  - debug
+  - publish
+
+debug:
+  stage: debug
+  script: 
+    - echo Done.
+  tags:
+    - development
+
+publish:
+  stage: publish
+  script:
+    - cd /var/www/html
+    - git config --global --add safe.directory /var/www/html
+    - git reset --hard 2>&1
+    - git fetch 2>&1
+    - git checkout $CI_COMMIT_SHA 2>&1
+    - echo Done.
+    # - ./wikis/publish.sh
+  environment:
+    name: publish
+    # url: "https://PROJECT.com/"
+  # when: manual
+  tags:
+    - production
+  only:
+    - master

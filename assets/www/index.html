@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+        <meta charset="utf-8">
+        <meta name="format-detection" content="telephone=no">
+        <meta name="msapplication-tap-highlight" content="no">
+        <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover, maximum-scale=1.0, user-scalable=0">
+        <meta name="color-scheme" content="light dark">
+        <link href="css/jquery-ui.min.css" rel="stylesheet">
+        <title></title>
+        <style>
+            * { -webkit-tap-highlight-color: rgba(0,0,0,0); }
+
+            @font-face { font-family: Poppins; src:url("font/Poppins/Poppins-Regular.ttf"); font-display: block; }
+
+            html,body { background-color:#151515; }
+
+            body, .fullscreen {
+                overflow:auto;
+                -webkit-touch-callout: none;
+                -webkit-text-size-adjust: none;
+                font-family: Poppins !important;
+                font-size:14px;
+                height:100vh;
+                min-height:100%;
+                max-height:100%;
+                margin:0px;
+                padding:0px;
+                text-align:left;
+                width:100%;
+                z-index:2; 
+            }
+
+            body { overflow:hidden; }
+            .screen { display:none; padding-bottom:4rem; }
+            .coreprogress { background-color:#7f8a8e; position:relative; margin:auto; width:100%; max-width:60px; height:4px; border-radius:20px; overflow:hidden; border:2px solid #999; } 
+            .coreprogress .determinate { background-color:#212420; position:absolute; top:0px; bottom:0px; left:0px; border-radius:20px; }
+            .coreappsplash { position:absolute; left:50%; top:50%; height:50px; width:225px; text-align:center; padding:0px 0px 0px 0px; margin:-115px 0px 0px -112px; }
+        </style>
+        
+        <script src="cordova.js"></script>
+        <script src="js/jquery.min.js"></script>
+        <script src="js/jquery-ui.min.js"></script>
+        <script src="js/jquery.mask.min.js"></script>
+        <script src="js/sha512.min.js"></script>
+        <script src="js/firebase.js"></script>
+    </head>
+    <body>
+        <div id="app" class="fullscreen" style="display:none;"></div>
+
+        <div id="coreloading" class="fullscreen" style="display:none;z-index:999999999;">
+            <div class="coreappsplash">
+                <div class="coreprogress" style="margin:2rem auto;display:none;">
+                    <div class="determinate" style="width: 0%"></div>
+                </div>
+            </div>
+            <script>
+                var serveraddress = "/";
+                var namespaceaddress = "app";
+                var resourceaddress = "resources/get";
+                
+                var core = {
+                    'empty':function(txt) {
+                        return ((String(txt).replace('undefined','').replace('null','').replace('[]','').replace('{}','').replace('NaN','').replace('0','').trim()) == "");
+                    },
+                    'get':function(key) {
+                        var rt = window.localStorage.getItem(key);
+                        return ((core.empty(rt)) ? "" : rt);
+                    },
+                    'set':function(key,value){
+                        try { window.localStorage.setItem(key,value); } catch(e) { }
+                    },
+                    'cls':function() {
+                        core.set(namespaceaddress+'html','');
+                        core.set(namespaceaddress+'css','');
+                        core.set(namespaceaddress+'js','');
+                    },
+                    'print':function(css,html,js) {
+                        if($('#autoserverjs').length) return;
+                        let contentjs = ((core.empty(js)) ? core.get(namespaceaddress+'js') : js);
+                        let contentcss = ((core.empty(css)) ? core.get(namespaceaddress+'css') : css);
+                        let contenthtml = ((core.empty(html)) ? core.get(namespaceaddress+'html') : html);
+                        $('body').prepend(`<div id="autoservercss">`+contentcss+`</div>`);
+                        $('body #app').append(contenthtml);
+                        $('body').append(`<div id="autoserverjs">`+contentjs+`<`+`/div>`);
+                        $('#coreloading').hide();
+                        $('#app').show();
+                        var evt = $.Event('onload');
+                        $(window).trigger(evt);
+                    },
+                    'loading':function(callback) {
+                        core.progress = 0;
+                        $('#app').hide();
+                        $('#coreloading').show();
+                        setTimeout(function(){ $('#coreloading .coreprogress').fadeIn(); },1234);
+                        core.loadtimer = setInterval(function(){ try {
+                            let progressunit = '#coreloading .coreprogress .determinate';
+                            if(core.progress < 90) core.progress = core.progress + (parseInt(Math.floor(Math.random() * 19))); 
+                            else { clearInterval(core.loadtimer); if(typeof callback == 'function') callback(); }
+                            $(progressunit).attr('style','width:'+core.progress+'%;');
+                          } catch(err) { clearInterval(core.loadtimer); if(typeof callback == 'function') callback(); }
+                        }, 234);
+                    },
+                    'update':function(callback) {
+                        let assets = namespaceaddress+'css,'+namespaceaddress+'html,'+namespaceaddress+'js';
+                        let uri = serveraddress+resourceaddress;
+                        if(typeof callback == 'function') core.loading();
+                        if(String(uri).indexOf('?') < 0) uri += '?';
+                        $.post(uri+"&t="+parseInt(new Date().getTime()),{ 'namespace':namespaceaddress, 'type':assets },function(data){
+                            core.progress = 100;
+                            var forceupdate = false;
+                            if(!data.result) return;
+                            $(String(assets).split(',')).each(function(index,item){
+                                let current = String(core.get(item)).trim();
+                                if(core.empty(data[item])) return;
+                                if(!core.empty(current) && current != String(data[item]).trim()) forceupdate = true;
+                                core.set(item, data[item]);
+                            });
+                            if(forceupdate) window.location.reload();
+                            else if(typeof callback == 'function') callback();
+                        }).fail(function(){
+                            if(typeof callback == 'function') callback();
+                        });
+                    }
+                };
+
+                $(document).ready(function(){
+                    if(core.get(namespaceaddress+'css') == '' || core.get(namespaceaddress+'html') == '' || core.get(namespaceaddress+'js') == '')
+                    return core.update(function(){ core.print(); });
+                    core.update();
+                    core.print();
+                });
+            </script>
+        </div>
+    </body>
+</html>

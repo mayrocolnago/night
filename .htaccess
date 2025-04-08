@@ -1,0 +1,70 @@
+Options +FollowSymLinks
+
+php_value upload_max_filesize 99M
+php_value post_max_size 99M
+
+RewriteEngine On
+
+RewriteCond %{REQUEST_URI} ^/$
+RewriteRule ^$ /index.php [L]
+
+# Always add a trailing slash to URLs that do not have one
+RewriteCond %{REQUEST_URI} !(/$|\.)
+RewriteCond %{REQUEST_URI} ^/([^/]+)+$
+RewriteRule (.*) %{REQUEST_URI}/ [R=302,L,END]
+
+# Re-route static asset paths to assets folder
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{DOCUMENT_ROOT}/assets/www/$2/$3 -f
+RewriteRule ^([a-z]+)\/([a-z]+)\/(.+)$ /assets/www/$2/$3 [QSA,L,NC]
+
+# Friendly URL for document viewer
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} ^(\/viewdoc\/) [NC]
+RewriteRule ^viewdoc\/(.*)$ /assets/www/viewerjs/$1 [QSA,L,NC]
+
+# Rewriter for storage files path
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} ^(\/storage\/) [NC]
+RewriteRule ^([0-9A-z]+)\/([0-9A-z]+)(.*)$ /index.php\?class=$1&function=$2&$3 [QSA,L,NC]
+
+# API trigger for multi directories
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)\/([0-9A-z]+)(.*)$ /index.php\?class=$1&function=$2&$3 [QSA,L,NC]
+
+# API trigger for single directory
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([0-9A-z]+)(.*)$ /index.php\?class=$1&function=index&$2 [QSA,L,NC]
+
+# Remove file extensions
+RewriteCond %{REQUEST_URI} \.php$
+RewriteCond %{REQUEST_URI} !/index\.php$
+RewriteRule ^ - [F]
+
+# Block access to some files
+RedirectMatch 404 \.md
+RedirectMatch 404 \.git
+RedirectMatch 404 \.env
+RedirectMatch 404 \.xml
+RedirectMatch 404 \.yml
+RedirectMatch 404 \.sh
+RedirectMatch 404 \.bat
+RedirectMatch 404 \.jar
+RedirectMatch 404 \.ini
+RedirectMatch 404 \.log
+RedirectMatch 404 \.crt
+RedirectMatch 404 \.key
+RedirectMatch 404 \.keep
+RedirectMatch 404 \.conf
+RedirectMatch 404 \.lock
+RedirectMatch 404 \.json
+RedirectMatch 404 \.plist
+RedirectMatch 404 \.example
+RedirectMatch 404 \.keystore
+RedirectMatch 404 \.htaccess
+RedirectMatch 404 Dockerfile

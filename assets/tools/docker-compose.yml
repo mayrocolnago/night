@@ -1,0 +1,14 @@
+version: "2.0"
+
+services:
+    cordova:
+        stdin_open: true # docker run -i
+        tty: true # docker run -t
+        build: 
+            context: .
+            dockerfile: Dockerfile
+        container_name: cordova
+        ports:
+            - 127.0.0.1:8000:8000
+        volumes:
+            - ..:/workspace
