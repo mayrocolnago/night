@@ -106,6 +106,15 @@ class pdoclass {
 		} 
 	}
 
+	public function pdo_create($table,$fields=[],$primarykey=null,$more=[]) {
+		if(empty($fields)) return [];
+        $this->pdo_query("CREATE TABLE IF NOT EXISTS `$table` (
+            ".implode("\n",array_map(function($a,$b){ return "`$a` $b,"; },array_keys($fields),array_values($fields)))."
+            PRIMARY KEY (".($primarykey ?? (array_keys($fields)[0] ?? 'id')).")
+			".((!empty($more)) ? ((is_array($more) ? ",\n".implode(",\n",$more) : $more)) : "").")");
+        return array_keys($fields);
+    }
+
 	public function pdo_insert($table,$array=[]) {
 		if(!$this->pdo_query("INSERT INTO $table (".implode(',',array_keys($array)).") VALUES (:".implode(', :',array_keys($array)).")", $array))
 		return 0; else return $this->pdo_insert_id();

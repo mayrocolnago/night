@@ -26,19 +26,12 @@ class example {
     //This is the database schema. It is useful for auto-deploying your table schema for each module
     //For example, this module uses this specific table. Others will handle their own tables
     public static function database() {
-        $fields = [
+        return pdo_create(self::$crudTable,[
             "id" => "int NOT NULL AUTO_INCREMENT",
             "title" => "varchar(255) NOT NULL",
             "userid" => "varchar(255) NOT NULL",
             "details" => "longtext NULL DEFAULT NULL"
-        ];
-        //Create table if it not exists
-        pdo_query("CREATE TABLE IF NOT EXISTS `".self::$crudTable."` (
-            ".implode("\n",array_map(function($a,$b){ return "`$a` $b,"; },
-            array_keys($fields),array_values($fields)))."
-            PRIMARY KEY (".(array_keys($fields)[0] ?? 'id')."))");
-        //Return table field names if needed
-        return array_keys($fields);
+        ]);
     }
 
     //This is the main function that will be called when the module is loaded

@@ -201,6 +201,13 @@ Other parameters:
 The framework includes a PDO wrapper class for database operations:
 
 ```php
+// Create a table
+$fields = pdo_create("users",[
+    "id" => "int NOT NULL AUTO_INCREMENT",
+    "name" => "varchar(255) NOT NULL",
+    "email" => "varchar(255) NOT NULL"
+]); // returns an array with the fields keys ['id','name','email']
+
 // Execute a query
 $result = pdo_query("SELECT * FROM users WHERE id = ?", [1]);
 
@@ -208,7 +215,7 @@ $result = pdo_query("SELECT * FROM users WHERE id = ?", [1]);
 $users = pdo_fetch_array("SELECT * FROM users");
 
 // Insert data
-$id = pdo_insert("users", ["name" => "John", "email" => "john@example.com"]);
+$id = pdo_insert("users", ["name" => "John", "email" => "john@example.com"]); //returns last insert id
 
 // Get last insert ID
 $lastId = pdo_insert_id();
@@ -624,6 +631,8 @@ setitem('myconf', '1');
 // Get a configuration value
 let conf = getitem('myconf');
 ```
+
+> To save global configurations with `setitem` use `@` as prefix, e.g. `@myconf`.
 
 ---
 
