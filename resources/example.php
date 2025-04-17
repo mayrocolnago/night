@@ -36,7 +36,7 @@ class example {
 
     //This is the main function that will be called when the module is loaded
     public static function index($data=[]) {
-        exit(\resources::show(__CLASS__)); //This will call all assets to be loaded for this module
+        exit(\assets::show(__CLASS__)); //This will call all assets to be loaded for this module
     }
 
     //This is the CSS for this module. It will bind with the rest of the app dinamically
@@ -192,7 +192,7 @@ class example {
             }
 
             /* This is an event handler that will be fired every screen loading */
-            $(window).on('screen_onload',function(state){
+            $(window).on('screen_onstart',function(state){
                 /* We figure out if the screen that is loading is actually the home screen */
                 if(state.to !== '#home') return;
                 /* Lets generate an user id if you do not have one for testing purposes */

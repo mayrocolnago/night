@@ -1,5 +1,5 @@
 <?php
-class resources {
+class assets {
     use \openapi;
 
     public static $openapiOnly = ['get'];
@@ -22,6 +22,7 @@ class resources {
     public static function listmodules($root='', $path='/', &$modules=[]) {
         if(!is_string($root)) return -1;
         if(empty($root)) $root = REPODIR.DIRECTORY_SEPARATOR.'resources';
+        if(!is_dir($root.$path)) return [];
         if(is_array($dir = @scandir($root.$path)))
           foreach($dir as $item)
             if($item !== '.' && $item !== '..' && ($item[0] ?? '') !== '.')

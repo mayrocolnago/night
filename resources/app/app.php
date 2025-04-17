@@ -6,7 +6,7 @@ class app {
 
     public static function index($data=[]) {
         //url /app will show all the css(), html() and js() functions from this folder
-        exit(\resources::show(__CLASS__)); //__CLASS__ being /app folder (see \resources for more details)
+        exit(\assets::show(__CLASS__)); //__CLASS__ being /app folder (see \assets for more details)
     }
 
     public static function log(...$params) {

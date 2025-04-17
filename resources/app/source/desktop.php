@@ -50,7 +50,7 @@ class desktop {
             let landerid = String('#'+($('.screen.homelander').first().attr('id')));
             if(!maindesktopsize()) return false;
             if($(`.screen:not(${mainid}):visible`).length) return false;
-            else switchtab(landerid);
+            else switchtab(landerid,true,{},0);
             return true;
         }
 
@@ -64,8 +64,8 @@ class desktop {
             let landerid = String('#'+($('.screen.homelander').first().attr('id')));
             let mainid = String('#'+($('.screen.homescreen').first().attr('id')));
             let atual = $(mainid).hasClass('fixed');
-            if(!maindesktopsize()) return (($('.screen').length > 1) ? ((atual) ? switchtab('#home') : '') : '');
-            if(!atual && !($(`.screen:not(${mainid}):visible`).length)) return switchtab(landerid);
+            if(!maindesktopsize()) return (($('.screen').length > 1) ? ((atual) ? switchtab('#home',true,{},0) : '') : '');
+            if(!atual && !($(`.screen:not(${mainid}):visible`).length)) return switchtab(landerid,true,{},0);
         });
 
         $(window).on("signininlabel",function(state){

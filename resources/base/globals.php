@@ -759,10 +759,10 @@ class globals {
           goes = String(goes).replace('#','').replace('home','');
           if(empty(goes)) goes = 'home';
           if(String('#'+goes) === getitem('screen')) {
-            if(!($('.screen:visible').length)) switchtab('#'+goes,false,params);
+            if(!($('.screen:visible').length)) switchtab('#'+goes,true,params,0);
             return;
           }
-          switchtab('#'+goes,false,params);
+          switchtab('#'+goes,true,params,0);
       });
 
       $(window).on('popstate',function(){
@@ -773,17 +773,20 @@ class globals {
           if(!($(screen).length)) return;
           if(!($(screen).hasClass('screen'))) return;
           for (let [key, value] of paramstr.entries()) params[key] = value;
-          switchtab(screen,true,params);
+          switchtab(screen,true,params,0);
       });
 
       /* animation switch between .screen class */
-      function switchtab(to,backwards,params) {
+      function switchtab(to,backwards,params,stinterval) {
+          if(typeof stinterval === 'undefined') stinterval = switchtabinterval;
           if(typeof params === 'undefined' || empty(params)) params = {};
           if(typeof backwards === 'object') {
             params = backwards;
             backwards = false;
           }
           var before = getitem('screen');
+          if(before === to) stinterval = 0;
+          if(before === '#home' || (to === '#home' && backwards)) stinterval = 0;
           eventfire('screen_onleft',{ ...{ 'from':before, 'to':to }, ...params });
           setitem('screen',to);
           var vt = [];
@@ -793,7 +796,7 @@ class globals {
               to = getitem('screen');
               if(!($(to).length)) to = screen = '#home';
               var gonext = function(){
-                  eventfire('screen_onload',{ ...{ 'from':before, 'to':to }, ...params });
+                  if(backwards !== true) eventfire('screen_onload',{ ...{ 'from':before, 'to':to }, ...params });
                   eventfire(String(to).replace(/[^0-9a-z\_]/gi,'')+'_onload');
                   $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled');
                   $('html, body, fullscreen').scrollTop(0);
@@ -802,15 +805,15 @@ class globals {
                   const newHash = String(`#${to}${queryParams ? '/' + queryParams : ''}`).replace('##','#');
                   history.pushState(null, '', url.pathname + newHash);
               };
-              if(switchtabinterval > 1) return $(to).show('slide', optin, switchtabinterval, gonext);
-              $(to).show((($(to).hasClass('fast')) ? 1 : 100),function(done){ gonext(); });
+              if(stinterval > 1) return $(to).show('slide', optin, stinterval, gonext);
+              $(to).show((($(to).hasClass('fast')) ? 1 : stinterval),function(done){ gonext(); });
           };
           eventfire('switchtab',{ ...{ 'from':before, 'to':to }, ...params });
           eventfire('screen_onstart',{ ...{ 'from':before, 'to':to }, ...params });
           if(!($('.screen:visible').length)) return newview();
           $('.screen:not(.fixed):visible').each(function(index,item){ vt.push('#'+String($(item).attr('id'))); });
           if(empty(vt)) return newview();
-          if(switchtabinterval > 1) return $(vt.join(',')).hide('slide', optout, switchtabinterval, newview);
+          if(stinterval > 1) return $(vt.join(',')).hide('slide', optout, stinterval, newview);
           $(vt.join(',')).hide(); newview();
       }
 

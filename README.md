@@ -40,10 +40,12 @@ NIGHT is a lightweight, flexible PHP framework designed for rapid application de
 
 ```json
 {
-  "dbstring": "mysql:host=localhost;dbname=yourdb;charset=utf8",
-  "dbuser": "username",
-  "dbpass": "password",
-  "DEVELOPMENT": true
+  "dbstring":"mysql:host=localhost:3306;dbname=project",
+  "dbuser":"root",
+  "dbpass":"root",
+  "projectname":"night",
+  "projecttitle":"NIGHT Framework",
+  "secret":"YOURSECRET"
 }
 ```
 
@@ -304,7 +306,7 @@ Use ":" for searching and "|" for `OR` conditioning
 
 ### Dynamic Content Loading
 
-The resources module allows you to dynamically load HTML, CSS, and JavaScript content from a entire folder:
+The `assets` module allows you to dynamically load HTML, CSS, and JavaScript content from a entire folder:
 
 File: `/resources/app.php`
 
@@ -316,7 +318,7 @@ class app {
 
     public static function index($data=[]) {
         // This will load all CSS, HTML, and JS from the "app" namespace.
-        exit(\resources::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
+        exit(\assets::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
     }
 }
 ```
@@ -384,7 +386,7 @@ class anotherscreen {
 }
 ```
 
-All the resources will be brought together and cached on the user's browser so that it can be loaded **faster** on the next visit and run **offline**. All this from a simple static HTML powerful interface.
+All the assets (CSS, HTML, JS) will be brought together and cached on the user's browser so that it can be loaded **faster** on the next visit and run **offline**. All this from a simple static HTML powerful interface.
 
 You can also replicate the structure to create different apps and panels in the same project.
 

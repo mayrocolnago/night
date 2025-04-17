@@ -1,9 +1,5 @@
 [`Home`](home)
- 
-**/resources**
- 
-- [`get`](/resources/get)
- 
+  
  **/qrcode**
  
 - [`text`](/qrcode/text)
