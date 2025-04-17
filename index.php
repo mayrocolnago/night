@@ -27,7 +27,7 @@ if(file_exists($srvcfg = (__DIR__.DIRECTORY_SEPARATOR.'config.inc.php'))) @inclu
 
 if(!file_exists($almodsfile = (__DIR__.DIRECTORY_SEPARATOR.'autoloader.json'))
 &&(!file_exists($almodsfile = (__DIR__.DIRECTORY_SEPARATOR.'.autoloader.json'))))
-  @file_put_contents($almodsfile, @json_encode(($almods = ['\\pdoclass', '\\globals']), JSON_PRETTY_PRINT));
+  $almods = ['\\pdoclass', '\\globals'];
   
 if(is_array($almods ?? '') || is_array($almods = @array_values(@json_decode(@file_get_contents($almodsfile)))))
   foreach($almods as $am) if(class_exists($am)) new $am;
