@@ -259,8 +259,8 @@ class cart {
                 let errorhandler = function(obj){
                     console.log('Could not add to cart',obj);
                 };
-                /* We can use `post` function from `\globals` module */            
-                post("cart/create",{"product_id":productid},function(data){
+                /* We can use `curl` function from `\globals` module */            
+                curlsend("cart/create",{"product_id":productid},function(data){
                     /* We always check first if there is no errors */
                     if(!data || data.error) return errorhandler(data);
                     /* Then we do everything we need to do */
@@ -426,24 +426,24 @@ The storage module supports various upload methods:
 ```
 
 2. **Base64 upload**:
-```php
-$base64Data = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD...";
-$result = post('storage/send', [
-    'base64' => 1,
-    'file' => $base64Data,
-    'f' => 'profile',
-    'p' => 'users/'
-]);
+```js
+let base64Data = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD...";
+let result = curlsend('storage/send',{
+    "base64": 1,
+    "file": base64Data,
+    "f": "profile",
+    "p": "users/"
+});
 ```
 
 3. **URL upload**:
-```php
-$result = post('storage/send', [
-    'fromurl' => 1,
-    'file' => 'https://example.com/image.jpg',
-    'f' => 'profile',
-    'p' => 'users/'
-]);
+```js
+let result = curlsend('storage/send',{
+    "fromurl": 1,
+    "file": "https://example.com/image.jpg",
+    "f": "profile",
+    "p": "users/"
+});
 ```
 
 ### JavaScript Upload Helper

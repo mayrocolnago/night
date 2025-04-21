@@ -15,7 +15,7 @@ class native {
                 var paramset = { 'f':'foto', 'e':'jpg', 'p':'/', 'base64':'1', 'file':file };
                 try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
                   paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
-                post('storage/send', paramset, null, null,
+                curlsend('storage/send', paramset, null, null,
                 function(data){ if(typeof onsuccess !== 'function') return;
                     if(String(data.result).replace('null','').replace('undefined','').trim() == '') return onsuccess(file);
                     else onsuccess((typeof upstoragedefaultpathdir == 'undefined' ? '' : upstoragedefaultpathdir)+data.result); }); 

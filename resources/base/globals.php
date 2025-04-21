@@ -626,7 +626,7 @@ class globals {
                       var paramset = { 'f':'file4', 'p':'/', 'e':'jpeg', 'base64':'1', 'file':upfilebs4 };
                       try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
                         paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
-                      post('storage/send', paramset, function(fup){
+                      curlsend('storage/send', paramset, function(fup){
                         console.log('Sent by base64', JSON.stringify(fup));
                         $(elem).attr('src',fup.url); },function(error){ $(elem).attr('src','error'); },
                         function(always){ $(elem).removeClass('loadblink'); });
@@ -757,7 +757,7 @@ class globals {
             for (let [key, value] of paramstr.entries()) params[key] = value;
           }
           goes = String(goes).replace('#','').replace('home','');
-          if(empty(goes)) goes = 'home';
+          if(empty(goes) || String(goes).indexOf('_') > -1) goes = 'home';
           if(String('#'+goes) === getitem('screen')) {
             if(!($('.screen:visible').length)) switchtab('#'+goes,true,params,0);
             return;
@@ -797,6 +797,7 @@ class globals {
               if(!($(to).length)) to = screen = '#home';
               var gonext = function(){
                   if(backwards !== true) eventfire('screen_onload',{ ...{ 'from':before, 'to':to }, ...params });
+                  eventfire('screen_onready',{ ...{ 'from':before, 'to':to }, ...params });
                   eventfire(String(to).replace(/[^0-9a-z\_]/gi,'')+'_onload');
                   $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled');
                   $('html, body, fullscreen').scrollTop(0);
@@ -914,43 +915,102 @@ class globals {
                   || typeof function_name === 'function');
       }
 
-      /* facilitated post function */
-      var post_default_params = {};
-      function post(url,params,success,error,always,timeout,cache) {
+      /**
+       * Send a request to the server (facilitated cURL/Ajax function)
+       * 
+       * @param {string} url - URL to send the request to (auto set of server address if not provided)
+       * @param {object} params - If you want to use POST method, pass the parameters here
+       * @param {function} success - Callback function to execute on success
+       * @param {function} error - Callback function to execute on error
+       * @param {function} always - Callback function that will always be called after success and error
+       * @param {number} timeout - Timeout in milliseconds (zero for none)
+       * @param {boolean/string} cachectl - If true, adds a timestamp to the URL to prevent caching. If "cache" it will rapidly return the cached value
+       * @param {string} reqtype - (default application/x-www-form-urlencoded) - Type of request (multipart/form-data, application/json)
+       * @param {boolean} cors - (default false) If true, it will use CORS to send the request (cross-origin resource sharing)
+       */
+      var curl_default_params = {};
+      function curlsend(url,params,success,error,always,timeout,cachectl,reqtype,cors) {
+        reqtype = reqtype || 'application/x-www-form-urlencoded';
+        cachectl = cachectl || false;
+        cors = cors || false;
         let token = getitem('token');
         let dauth = getitem('deviceauth');
         let pushid = getitem('@pushid');
         if(typeof params === 'null' || typeof params === 'undefined') params = {}; 
         if(!(typeof params !== 'object' && typeof params !== 'array')) {
-          try { params = { ...params, ...post_default_params }; } catch(e) { }
+          try { params = { ...params, ...curl_default_params }; } catch(e) { }
           if(token !== '') params.actk = token;
           if(dauth !== '') params.deviceauth = dauth;
           if(pushid !== '') params.pushid = pushid;
-          if(cache === true) params.t = (new Date().getTime()); }
+          if(cachectl === true) params.t = (new Date().getTime()); }
         else if(typeof params === 'string') {
                 if(token !== '') params += '&actk='+token;
                 if(dauth !== '') params += '&deviceauth='+dauth;
-                if(cache === true) params += '&t='+(new Date().getTime()); }
+                if(cachectl === true) params += '&t='+(new Date().getTime()); }
         try { if(token !== $_cookie('actk') && delcookie('actk')) savecookie('actk',token); } catch (err) { }
         var e = String('//'+(String(url+'?').split('?')[0])).split('/');
             e = e[e.length-2]+e[e.length-1];
-        var callback = function(cb){
-          if(typeof always === 'function') always(cb);
-          try { cb['params'] = params; } catch(e) { }
+        var successfn = function(d,p){ try { if(typeof success === 'function') success(d,p); } catch(err) { } };
+        var errorfn = function(d,p){ try { if(typeof error === 'function') error(d,p); } catch(err) { } };
+        var alwaysfn = function(d,p,o){
+          try { if(typeof always === 'function') always(d,p); } catch(err) { }
           $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled');
-          eventfire(e+'_onpostload', cb);
+          eventfire(e+'_onpostload', {'data':d, 'params':p});
         };
         eventfire(e+'_onpoststart', params);
-        return $.post(((String(url).indexOf('//') < 0) ? serveraddress+url : url), params)
-                .done(function(data){
-                  try { if(!empty(params.preventlogout)) data.preventlogout = 1; } catch(e) { }
-                  if(data.result < 0) eventfire('resulterr',data); 
-                  try { if(typeof success === 'function') success(data); } catch(e) { }
-                  callback(data); })
-                .fail(function(err){
-                  try { if(typeof error === 'function') error(err); } catch(e) { }
-                  callback(err);
-                });
+        if(typeof cachectl !== 'boolean' || cachectl === 'store' || cachectl === 'cache') {
+          var curl_cache_storage = 'curl_cache_storage';
+          var cachecode = String(url).replace(/[^a-z0-9]/gi,'').substr(0,50);
+              cachecode = cachecode +'_'+ String(JSON.stringify(params)).replace(/[^a-zA-Z0-9]/gi,'').substr(0,50);
+          var cachestorage = getitem(curl_cache_storage); if(empty(cachestorage)) cachestorage = {};
+          if(typeof cachectl === 'string')
+            if(empty(cachestorage[cachecode])) cachectl = {};
+            else {
+              alwaysfn(cachestorage[cachecode],params,successfn(cachestorage[cachecode],params));
+              return curlsend(url,params,success,error,always,timeout,cachestorage[cachecode],reqtype,cors); } }
+        var ajaxOptions = {
+          url: ((String(url).indexOf('//') < 0) ? serveraddress + url : url),
+          method: 'POST',
+          contentType: reqtype,
+          crossDomain: cors
+        };
+        if(timeout && parseInt(timeout) > 0) ajaxOptions.timeout = parseInt(timeout);
+        if(String(reqtype).indexOf('json') > -1) {
+          let bp = ((typeof params === 'object') ? JSON.stringify(params) : params);
+          ajaxOptions.headers = { 'Content-Type': (ajaxOptions.contentType = 'application/json') };
+          ajaxOptions.body = bp;
+        } else
+          if(reqtype === 'multipart/form-data') {
+            try { delete ajaxOptions.contentType;
+            if(!(params instanceof FormData)) {
+              const formData = new FormData();
+              for(const key in params) if(params.hasOwnProperty(key)) formData.append(key, params[key]);
+              ajaxOptions.data = formData;
+            } ajaxOptions.processData = false; } catch(err) { }
+          } else 
+            ajaxOptions.data = params;
+        return $.ajax(ajaxOptions)
+          .done(function(data){
+            let comp = data;
+            let trigger = true;
+            try { delete comp.elapsed; delete comp.overelapsed; } catch(err) { }
+            try { if(!empty(params.preventlogout)) data.preventlogout = 1; } catch(e) { }
+            if(data?.result < 0) eventfire('resulterr',data);
+            if(typeof cachectl !== 'boolean') {
+              let a = cachestorage[cachecode];
+              let b = comp;
+                  a = String(((typeof a === 'object') ? JSON.stringify(a) : a)).replace(/[^0-9A-Za-z]/gi,'');
+                  b = String(((typeof b === 'object') ? JSON.stringify(b) : b)).replace(/[^0-9A-Za-z]/gi,'');
+              if(trigger = (a !== b)) {
+                cachestorage[cachecode] = comp;
+                setitem(curl_cache_storage,cachestorage);
+            } }
+            if(trigger) alwaysfn(data,params,successfn(data,params));
+          })
+          .fail(function(data){
+            if(!(typeof cachectl === 'object' || typeof cachectl === 'array'))
+              alwaysfn(data,params,errorfn(data,params));
+          });
       }
 
       /* similar function from date on php */

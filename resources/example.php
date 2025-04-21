@@ -126,9 +126,9 @@ class example {
                     let title = prompt('Title');
                     if(empty(title)) return;
                     /* We can trigger the `post` function from `globals` everytime we need access an API */
-                    post("<?=__CLASS__;?>/create",{
+                    curlsend("<?=__CLASS__;?>/create",{
                         'title':title,
-                        ':userid':getitem('@userid_example'), /* ":" would not be necessary on create, but its here for permission handling */
+                        ':userid':getitem('uid'), /* ":" would not be necessary on create, but its here for permission handling */
                         'details-created':(new Date().toLocaleString()), /* Dashed keys will store json values */
                         'details-user-desc':"nêw thing",
                         'details-user-agent':"<?=filtereduseragent();?>" /* Here is another useful function from `globals` */
@@ -142,9 +142,9 @@ class example {
                     if(empty(id)) return;
                     let title = prompt('New title');
                     if(empty(title)) return;
-                    post("<?=__CLASS__;?>/update",{
+                    curlsend("<?=__CLASS__;?>/update",{
                         ':id':id,
-                        ':userid':getitem('@userid_example'),
+                        ':userid':getitem('uid'),
                         'title':title,
                         'details-updated':(new Date().toLocaleString()),
                         'details-user-desc':'spécial char',
@@ -157,18 +157,21 @@ class example {
                 delete: function(el) {
                     let id = $(el).parent().attr('ref');
                     if(empty(id)) return;
-                    post("<?=__CLASS__;?>/delete",{':id':id, ':userid':getitem('@userid_example')},function(data) {
+                    curlsend("<?=__CLASS__;?>/delete",{':id':id, ':userid':getitem('uid')},function(data) {
                         if(!data || !data.result || data.error) return toast('Error');
                         $(el).parent().remove();
                         if(empty($('#todo-list').html()))
                             $('#todo-list').html('<i>Empty list</i>');
+                        todo.refresh(false);
                     });
                 },
-                refresh: function() {
-                    $('#todo-list').html(`<li>
-                        <span class="loadblink">Title of task</span><br>
-                        <span class="loadblink">00/00/0000 00:00:00</span></li>`).append($('#todo-list').html());
-                    post("<?=__CLASS__;?>/list",{':userid':getitem('@userid_example')},function(data) {
+                refresh: function(print) {
+                    if(print !== false)
+                        $('#todo-list').html(`<li>
+                            <span class="loadblink">Title of task</span><br>
+                            <span class="loadblink">00/00/0000 00:00:00</span></li>`).append($('#todo-list').html());
+                    curlsend("<?=__CLASS__;?>/list",{':userid':getitem('uid')},function(data) { 
+                        if(print === false) return;
                         if(!data || !data.result || data.error) return $('#todo-list').html('<i>Empty list</i>');
                         $('#todo-list').html('');
                         $(data.data).each(function(index,item){
@@ -185,9 +188,9 @@ class example {
                             `);
                         });
                     },
-                    function(error){ 
+                    function(error){
                         toast('Connection error'); 
-                    });
+                    },null,0,'cache'); /* this parameters will cache the request */
                 }
             }
 
@@ -196,8 +199,8 @@ class example {
                 /* We figure out if the screen that is loading is actually the home screen */
                 if(state.to !== '#home') return;
                 /* Lets generate an user id if you do not have one for testing purposes */
-                if(empty(getitem('@userid_example')))
-                    setitem('@userid_example',(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)));
+                if(empty(getitem('uid'))) /* "uid" is a global reference for logged users on setitem/getitem */
+                    setitem('uid',(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)));
                 /* We trigger the listing function */
                 todo.refresh();
             });
