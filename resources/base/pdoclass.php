@@ -17,13 +17,13 @@ class pdoclass {
 	private $connected = null;
 
 	public function database() {
-		$this->pdo_query("CREATE TABLE IF NOT EXISTS log_query (
-			id bigint(20) NOT NULL AUTO_INCREMENT,
-			query longtext NULL DEFAULT NULL,
-			parameters longtext NULL DEFAULT NULL,
-			response longtext NULL DEFAULT NULL,
-			runat int NULL,
-			PRIMARY KEY (id))");
+		return $this->pdo_create("log_query",[
+			"id" => "bigint(20) NOT NULL AUTO_INCREMENT",
+			"query" => "longtext NULL DEFAULT NULL",
+			"parameters" => "longtext NULL DEFAULT NULL",
+			"response" => "longtext NULL DEFAULT NULL",
+			"runat" => "int NULL"
+		]);
 	}
 
 	public function __construct(...$params) {
@@ -50,7 +50,19 @@ class pdoclass {
 		try {
 			$this->connected = new PDO($connectionstr, $dbuser, $dbpass);
 			$this->connected->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-		} catch (PDOException $e) { }
+		} catch (PDOException $e) { 
+			if(!empty($cndb = (explode(';dbname',"$connectionstr;dbname")[0] ?? '')) && is_string($cndb))
+				if(!empty($dbname = (explode(';',((explode(';dbname=',$connectionstr)[1] ?? '').';'))[0] ?? ''))) {
+					try {
+						$this->connected = new PDO($cndb, $dbuser, $dbpass);
+						$this->connected->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+						$this->pdo_query("CREATE DATABASE IF NOT EXISTS `$dbname` COLLATE utf8_general_ci;");
+						$this->pdo_close();
+						$this->connected = new PDO($connectionstr, $dbuser, $dbpass);
+						$this->connected->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+					} catch(PDOException $err) { }
+				}
+		}
 		return ($this->pdo_isconnected());
 	}
 

@@ -1,6 +1,4 @@
 <?php
-namespace app\sources;
-
 class desktop {
 
     public static function css($data=[]) { ?><style>

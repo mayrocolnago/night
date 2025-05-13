@@ -1,12 +1,12 @@
 <?php
-class app {
+class app extends \tabler {
     use \openapi;
 
     public static $openapiOnly = ['index'];
 
     public static function index($data=[]) {
         //url /app will show all the css(), html() and js() functions from this folder
-        exit(\assets::show(__CLASS__)); //__CLASS__ being /app folder (see \assets for more details)
+        exit(str_replace('<title></title>','<title>Project</title>',parent::index(__CLASS__))); //__CLASS__ being /app folder (see \assets for more details)
     }
 
     public static function log(...$params) {
@@ -306,28 +306,11 @@ class app {
 
             #tkeqrcomponent { border:0px solid transparent !important; }
         </style><?php
-        echo \globals::css();
-    }
-
-    public static function html($data=[]) { ?>
-        <div id="home" class="screen"></div><?php
+        echo parent::css();
     }
 
     public static function js($data=[]) { ?><script>
-
-        function animation_execute() {
-            $('[data-animate]').each(function(){
-                if($(this).is(':hidden')) return;
-                if($(window).height() - $(this)[0].getBoundingClientRect().y > 0) $(this).addClass('animate');
-                if($(window).height() - $(this)[0].getBoundingClientRect().y < 1 || $(this).height() + $(this)[0].getBoundingClientRect().y <= 0) $(this).removeClass('animate');
-            });
-        }
-
-        $(window).scroll(function(){ animation_execute(); });
-
         $(window).on('screen_onstart',function(state){ 
-            $('.animate').removeClass('animate'); 
-
             $('button[icon]').each(function(){ 
                 let bitem = this;
                 let bonclick = empty($(bitem).attr('onclick'),'');
@@ -345,24 +328,12 @@ class app {
         });
 
         $(window).on('screen_onload',function(state){ 
-
-            if(empty(state.to)) return switchtab('#home');
-
-            if(!($(state.to).length)) return switchtab('#home');
-
             if($(state.to+' .backbtn').length)
                 $(state.to+' .backbtn').html('<div style="padding:0px 1rem;font-size:30px;"><span class="encolor">&#8249;</span><span class="encolor bttitle">Voltar</span></div>');
-
-            animation_execute();
         });
 
         </script><?php
-        echo \globals::js();
-
-        if(module_exists('storage::upload')) echo \storage::upload(['_js' => true]);
-
-        if($_SERVER['DEVELOPMENT'] ?? false)
-        echo '<script>$(window).on("onload",function(state){ setTimeout(function(){ core.cls(); },1000); });</script>';
+        echo parent::js();
     }
 
 }

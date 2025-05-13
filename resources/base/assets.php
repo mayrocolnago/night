@@ -54,6 +54,11 @@ class assets {
                         ||(((module_exists(($cd="\\$root\\$c"),$method) || module_exists(($cd="\\$c"),$method)) && (!empty($f = "$cd::$method")))))
                             if(@ob_start() && (@$f() ?? true) && ($r = @ob_get_clean()))
                                 $retorno[$method] = ($retorno[$method] ?? '')."\n".self::parselines($r);
+        /* For development environments, clear caching */
+        if($_SERVER['DEVELOPMENT'] ?? false)
+            foreach($methods as $method)
+                if(($fn=substr($method,-2)) === 'js' && !empty($retorno[$method] ?? ''))
+                    $retorno[$method] .= '<script>$(window).on("onload",function(state){ setTimeout(function(){ core.cls(); },1000); });</script>';
         /* return modules content */
         return $retorno;
     }

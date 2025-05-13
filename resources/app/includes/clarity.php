@@ -1,5 +1,5 @@
 <?php
-namespace app\tracking;
+namespace app\includes;
 
 class clarity {
 

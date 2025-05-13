@@ -36,7 +36,7 @@ class example {
 
     //This is the main function that will be called when the module is loaded
     public static function index($data=[]) {
-        exit(\assets::show(__CLASS__)); //This will call all assets to be loaded for this module
+        exit(str_replace('<title></title>','<title>TO DO - Example</title>',\assets::show(__CLASS__))); //This will call all assets to be loaded for this module
     }
 
     //This is the CSS for this module. It will bind with the rest of the app dinamically
@@ -47,7 +47,7 @@ class example {
             .row,.line { margin:1rem 0; }
             .footer { margin-top:4rem; }
 
-            #todo-list { margin:4rem 0px; padding:1rem 2rem; background-color:rgb(153,153,153,0.2); }
+            #todo-list { margin:4rem 0px; padding:1rem 2rem; background-color:rgb(153,153,153,0.2); border-radius:16px; }
             #todo-list li:not(:last-child) { margin-bottom:1rem; }
         </style><?php
         \globals::css();

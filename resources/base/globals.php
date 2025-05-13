@@ -530,6 +530,12 @@ class globals {
         .horizontalscroll::-webkit-scrollbar-track { border-radius: 10px;}
         .horizontalscroll::-webkit-scrollbar-thumb { background: #999; border-radius: 10px; border:4px solid var(--background); }
 
+        [data-animate] { filter:opacity(0); transition: .4s; }
+        [data-animate="up"] { transform: translate3d(0, +70px, 0); }
+        [data-animate="left"] { transform: translate3d(-70px, 0, 0); }
+        [data-animate="right"] { transform: translate3d(+70px, 0, 0); }
+        [data-animate].animate { filter:opacity(1) !important; transform: translate3d(0,0,0); }
+
         @media only screen and (min-width: 769px) {
           #app.fullscreen .screen .heading { max-width:600px; margin:auto; }
           *::-webkit-scrollbar { display: none; }
@@ -546,6 +552,16 @@ class globals {
           0% { background-position: 0% 50%; }
           50% { background-position: 100% 50%; }
           100% { background-position: 0% 50%; }
+        }
+
+        @keyframes shake {
+          10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); }
+          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } 
+        }
+
+        .shake, .terremoto { 
+            animation: shake 0.82s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0); backface-visibility: hidden; perspective: 1000px; 
         }
 
         .spinning-circle {
@@ -572,6 +588,8 @@ class globals {
           background-size: 999% 999%;
           animation: glowborderanimationframe 3s linear infinite;
         }
+
+        .screen { padding-bottom:4rem; overflow:hidden; }
     </style><?php 
   }
 
@@ -743,12 +761,52 @@ class globals {
 
       /* animation to show there is an horizontal space to scroll */
       function animate_horizontalscroll() {
-          if($('.horizontalscroll:visible').length)
-              $('.horizontalscroll:visible').scrollLeft($(document).width() * 2).animate({ scrollLeft: 0 },1500);
+          if(!($('.horizontalscroll:visible').length)) return;
+          $('.horizontalscroll:visible').scrollLeft($(document).width() * 2).animate({ scrollLeft: 0 },1500);
+          try {
+            /* get element position to show a hand emoji instructing how to scroll left by slowly slide left a little bit */
+            if(empty($('.horizontalscroll:visible')[0].offsetTop)) return;
+            if(empty($('.horizontalscroll:visible')[0].offsetLeft)) return;
+            if(empty($('.horizontalscroll:visible')[0].scrollWidth)) return;
+            if(empty($('.horizontalscroll:visible').innerHeight())) return;
+            if(empty($('.horizontalscroll:visible').innerWidth())) return;
+            if(($('.horizontalscroll:visible')[0].scrollWidth - 100) < $('.horizontalscroll:visible').innerWidth()) return;
+            let pos = { 
+              top: (($('.horizontalscroll:visible')[0].offsetTop + $('.horizontalscroll:visible').innerHeight()) - 10), 
+              left: (($('.horizontalscroll:visible')[0].offsetLeft + $('.horizontalscroll:visible').innerWidth()) - 100)
+            };
+            let hand = $(`<div class="hand" style="position:absolute;top:${pos.top}px;left:${pos.left}px;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor" style="width:14px;height:16px;">
+                ${((!(thisisandroid || thisisiphone)) ? `<path d="M0 192l176 0L176 0 160 0C71.6 0 0 71.6 0 160l0 32zm0 32L0 352c0 88.4 71.6 160 160 160l64 0c88.4 0 160-71.6 160-160l0-128-192 0L0 224zm384-32l0-32C384 71.6 312.4 0 224 0L208 0l0 192 176 0z"/>`
+                : `<path d="M128 40c0-22.1 17.9-40 40-40s40 17.9 40 40l0 148.2c8.5-7.6 19.7-12.2 32-12.2c20.6 0 38.2 13 45 31.2c8.8-9.3 21.2-15.2 35-15.2c25.3 0 46 19.5 47.9 44.3c8.5-7.7 19.8-12.3 32.1-12.3c26.5 0 48 21.5 48 48l0 48 0 16 0 48c0 70.7-57.3 128-128 128l-16 0-64 0-.1 0-5.2 0c-5 0-9.9-.3-14.7-1c-55.3-5.6-106.2-34-140-79L8 336c-13.3-17.7-9.7-42.7 8-56s42.7-9.7 56 8l56 74.7L128 40zM240 304c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 96c0 8.8 7.2 16 16 16s16-7.2 16-16l0-96zm48-16c-8.8 0-16 7.2-16 16l0 96c0 8.8 7.2 16 16 16s16-7.2 16-16l0-96c0-8.8-7.2-16-16-16zm80 16c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 96c0 8.8 7.2 16 16 16s16-7.2 16-16l0-96z"/>`)}
+              </svg>
+            </div>`);
+            hand.insertAfter($('.horizontalscroll:visible'));
+            hand.animate({ left: pos.left + 100 },1500,function(){ hand.remove(); });
+          } catch(err) { }
       }
-      
-      $(window).on("screen_onload",function(state){ realignfooting(); animate_horizontalscroll(); });
 
+      /* animation for incoming elements */
+      function animation_execute() {
+        $('[data-animate]').each(function(){
+            if($(this).is(':hidden')) return;
+            if($(window).height() - $(this)[0].getBoundingClientRect().y > 0) $(this).addClass('animate');
+            if($(window).height() - $(this)[0].getBoundingClientRect().y < 1 || $(this).height() + $(this)[0].getBoundingClientRect().y <= 0) $(this).removeClass('animate');
+        });
+      }
+
+      /* animations controlled by events */
+      $(window).scroll(function(){ animation_execute(); });
+
+      $(window).on('screen_onstart',function(state){ $('.animate').removeClass('animate'); });
+      
+      $(window).on("screen_onload",function(state){ 
+        if(empty(state.to) || (!($(state.to).length))) return switchtab('#home');
+
+        realignfooting(); animate_horizontalscroll(); animation_execute(); 
+      });
+
+      /* urlhash control */
       $(window).on('onload',function(){
           let [goes, querystr] = String(window.location.hash).split('/');
           let params = {};
@@ -797,7 +855,6 @@ class globals {
               if(!($(to).length)) to = screen = '#home';
               var gonext = function(){
                   if(backwards !== true) eventfire('screen_onload',{ ...{ 'from':before, 'to':to }, ...params });
-                  eventfire('screen_onready',{ ...{ 'from':before, 'to':to }, ...params });
                   eventfire(String(to).replace(/[^0-9a-z\_]/gi,'')+'_onload');
                   $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled');
                   $('html, body, fullscreen').scrollTop(0);
@@ -805,6 +862,7 @@ class globals {
                   const queryParams = new URLSearchParams(params).toString();
                   const newHash = String(`#${to}${queryParams ? '/' + queryParams : ''}`).replace('##','#');
                   history.pushState(null, '', url.pathname + newHash);
+                  eventfire('screen_onready',{ ...{ 'from':before, 'to':to }, ...params });
               };
               if(stinterval > 1) return $(to).show('slide', optin, stinterval, gonext);
               $(to).show((($(to).hasClass('fast')) ? 1 : stinterval),function(done){ gonext(); });
