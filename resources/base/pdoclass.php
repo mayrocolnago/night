@@ -128,7 +128,7 @@ class pdoclass {
     }
 
 	public function pdo_insert($table,$array=[]) {
-		if(!$this->pdo_query("INSERT INTO $table (".implode(',',array_keys($array)).") VALUES (:".implode(', :',array_keys($array)).")", $array))
+		if(!$this->pdo_query("INSERT INTO `$table` (`".implode('`,`',array_keys($array))."`) VALUES (:".implode(', :',array_keys($array)).")", $array))
 		return 0; else return $this->pdo_insert_id();
 	}
 
