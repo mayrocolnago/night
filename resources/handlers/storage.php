@@ -1,8 +1,8 @@
 <?php
 class storage {
-    use \openapi;
 
     public static $uploadlocked = true; //you can unlock this with auto loaded modules that verifies user authentication
+    public static $urlpath = '/storage/'; //you can set a different path to search for files (may require chaging the htaccess)
 
     /* databases that are automatically created to serve file storage */
     protected static function database() {
@@ -30,18 +30,18 @@ class storage {
 
     /* returns the module script access URL. useful for filling in which URL we use for uploads */
     public static function url($data=[]) {
-        return THISURL.'/storage/';
+        return (THISURL.self::$urlpath);
     }
 
     /* simple function to check if the upload module is functional */
-    public static function ping($data=[]) {
-        return [ 'result'=>strtotime('now'), 'host'=>self::url() ];
+    public static function ping($data=[]):\route {
+        return response()->json([ 'result'=>strtotime('now'), 'host'=>self::url() ]);
     }
 
     /* function that receives file uploads from the web */
-    public static function send($data=[]) {
+    public static function send($data=[]):\route {
         //verify whether the upload is locked
-        if(self::$uploadlocked ?? true) ['result'=>'', 'err'=>'error. access denied'];
+        if(self::$uploadlocked ?? true) return response()->json(['result'=>'', 'err'=>'error. access denied']);
 
         $source = (isset($_REQUEST['f'])) ? preg_replace('/[^0-9a-zA-Z\-\_]/','',$_REQUEST['f']) : 'non';
         $path = (isset($_REQUEST['p'])) ? preg_replace('/[^a-z\/\_]/','',$_REQUEST['p']) : '';
@@ -62,19 +62,19 @@ class storage {
         //method via url download: ?download=1&file=http://remote/stream
         if((isset($_REQUEST['download'])) && (isset($_REQUEST['file']))) {
             $novonome = ($path . ($nome .= '_'.self::extension($_REQUEST['f'] ?? $_REQUEST['file'])['dot']));
-            if(!($fp_remote = @fopen($_REQUEST['file'], 'rb'))) return ['result'=>'', 'err'=>'error reading remote file'];
-            if(!($fp_local = @fopen($df = "/tmp/".$nome, 'wb'))) return ['result'=>'', 'err'=>'error writing local file'];
+            if(!($fp_remote = @fopen($_REQUEST['file'], 'rb'))) return response()->json(['result'=>'', 'err'=>'error reading remote file']);
+            if(!($fp_local = @fopen($df = "/tmp/".$nome, 'wb'))) return response()->json(['result'=>'', 'err'=>'error writing local file']);
             while($buffer = @fread($fp_remote, 8192)) @fwrite($fp_local, $buffer);
             @fclose($fp_remote); @fclose($fp_local);
-            if(!file_exists($df)) return ['result'=>'', 'err'=>'error downloading. probably /tmp/ permission issue'];
-            else return self::storefile($novonome, @file_get_contents($df));   
+            if(!file_exists($df)) return response()->json(['result'=>'', 'err'=>'error downloading. probably /tmp/ permission issue']);
+            else return response()->json(self::storefile($novonome, @file_get_contents($df)));
         }
 
         //method via external url copy: ?fromurl=1&file=http://remote/image.png
         if((isset($_REQUEST['fromurl'])) && (isset($_REQUEST['file']))) {
             $novonome = ($path . ($nome .= '_'.self::extension($_REQUEST['f'] ?? $_REQUEST['file'])['dot']));
-            if(!(@copy($_REQUEST['file'], ($df = "/tmp/".$nome)))) return ['result'=>'', 'err'=>'error. copy not completed'];
-            else return self::storefile($novonome, @file_get_contents($df));
+            if(!(@copy($_REQUEST['file'], ($df = "/tmp/".$nome)))) return response()->json(['result'=>'', 'err'=>'error. copy not completed']);
+            else return response()->json(self::storefile($novonome, @file_get_contents($df)));
         }
         
         //method via base64: ?base64=1&file=base64:file;ABCdefGHT123==
@@ -84,29 +84,29 @@ class storage {
             list(, $tipo) = explode(':', $tipo);
             list(, $dados) = explode(',', $dados);
             $arquivo_tmp = base64_decode($dados);
-            return self::storefile($novonome, $arquivo_tmp);   
+            return response()->json(self::storefile($novonome, $arquivo_tmp));
         }
 
         //method via direct write: ?getfile=1&file=content
         if((isset($_REQUEST['getfile'])) && (isset($_REQUEST['file']))) {
             $novonome = ($path . ($nome .= '_'.self::extension($_REQUEST['f'] ?? $_REQUEST['file'])['dot']));
-            return self::storefile($novonome, $_REQUEST['file']);
+            return response()->json(self::storefile($novonome, $_REQUEST['file']));
         }
                 
         //method via redirect only
         if((isset($_REQUEST['redirect'])) && (isset($_REQUEST['file']))) {
             $novonome = ($path . ($nome .= '_'.self::extension($_REQUEST['f'] ?? $_REQUEST['file'])['dot']));
-            return self::storefile($novonome, $_REQUEST['file'], ['redirect'=>$_REQUEST['file']]);
+            return response()->json(self::storefile($novonome, $_REQUEST['file'], ['redirect'=>$_REQUEST['file']]));
         }
 
         //method via form upload
         if((isset($_FILES['file'])) && (!empty(@$_FILES['file']))) {
             $novonome = ($path . ($nome .= '_'.self::extension($_FILES['file']['name'] ?? '')['dot']));
-            if(!file_exists($df = ($_FILES['file']['tmp_name'] ?? './void'))) return ['result'=>'', 'err'=>'error. file not found on tmp_dir '.$df];
-            return self::storefile($novonome, @file_get_contents($df));
+            if(!file_exists($df = ($_FILES['file']['tmp_name'] ?? './void'))) return response()->json(['result'=>'', 'err'=>'error. file not found on tmp_dir '.$df]);
+            return response()->json(self::storefile($novonome, @file_get_contents($df)));
         }
                     
-        return ['result'=>'', 'err'=>'error. no file found on parameters'];
+        return response()->json(['result'=>'', 'err'=>'error. no file found on parameters']);
     }
 
     /* function that saves the file to storage. it's public and can be used by other methods. returns the filename in the database */
@@ -150,12 +150,12 @@ class storage {
     }
 
     /* shortcut function to load js module */
-    public static function js() { self::upload(['_js' => true]); }
+    public static function js() { echo self::upload(['_js' => true])->data; }
 
     /* javascript binding code to turn the element into an uploader */
-    public static function upload($data=[]) {
-        if(isset($data['_php'])) return self::send($data);
-        if(!isset($data['_js'])) return -400;
+    public static function upload($data=[]):\route {
+        if(isset($data['_php'])) return response()->json(self::send($data)->data);
+        if(!isset($data['_js'])) return response()->json(-400);
         @header('Access-Control-Allow-Origin: *');
         @header('Content-Type: text/javascript');
         @header("Cache-Control: max-age=604800");
@@ -165,10 +165,11 @@ class storage {
             var upfilesendtimer = null;
             var upfilescriptfuncarray = [];
             var upfilescriptuploading = false;
-            var upstoragedefaultpathdir = '<?=self::url();?>';
-            var upstoragedefault = upstoragedefaultpathdir;
+            var upstoragedefault = '<?=self::url();?>';
+            var upstoragedefaultsend = '/<?=trim(str_replace("\\","/",get_called_class()),'/');?>/';
 
-            if(window.location.protocol === "https:") upstoragedefaultpathdir = String(upstoragedefaultpathdir).replace('http:','https:');
+            if(window.location.protocol === "https:") upstoragedefault = String(upstoragedefault).replace('http:','https:');
+            if(window.location.protocol === "https:") upstoragedefaultsend = String(upstoragedefaultsend).replace('http:','https:');
 
             function bindupload(element,params,onstart,ondone) {
                 var elemparent = fupgetelemparent(element);
@@ -248,13 +249,13 @@ class storage {
                 } catch(err) { }
                 retorno.sendtime = ((new Date()).getTime() / 1000);
                 try {
-                    $.ajax({ type: 'POST', url: upstoragedefaultpathdir+'send'+getp, data: atual.filedata,
+                    $.ajax({ type: 'POST', url: upstoragedefaultsend+'send'+getp, data: atual.filedata,
                         cache: false, processData: false, contentType: false,
                         success: function (updata) {
                             retorno.elapsedtime = ((new Date()).getTime() / 1000) - retorno.sendtime;
                             retorno.result = ((updata.result) ? updata.result : '');
-                            retorno.server = upstoragedefaultpathdir;
-                            retorno.url = upstoragedefaultpathdir+((updata.result) ? updata.result : '');
+                            retorno.server = upstoragedefault;
+                            retorno.url = upstoragedefault+((updata.result) ? updata.result : '');
                             retorno.err = ((updata.err) ? updata.err : '');
                             try { atual.ondone(retorno); } catch(e) { console.log('could not callback ondone upload script',e); }
                             upfilescriptuploading = false; upfilequeue.shift();
@@ -298,6 +299,7 @@ class storage {
                     });
             },2000);
         </script><?php
+        return route();
     }
 
     /* function that returns the file contents to a variable */
@@ -323,7 +325,7 @@ class storage {
     }
 
     /* method to call media through the URL (e.g. .../storage/folder/filename) */
-    public static function __callStatic($name='',$arg=[]) {
+    public static function __callStatic($name='',$arg=[]):\route {
         if(empty($filename = str_replace('.','_',"/$name".(array_keys($arg[0] ?? [])[0] ?? '')))) exit(' ');
         if(!is_string($filename)) exit(' ');
  
@@ -335,14 +337,14 @@ class storage {
         $mime = ($file['tags']['mime'] ?? self::extension($filename)['mime']);
 
         if(isset($arg[0]['details']))
-            return [
+            return response()->json([
                 'result'=>count($file), 
                 'hash'=>$hash,
                 'mime'=>$mime,
                 'file'=>$filename,
                 'data'=>($file['tags'] ?? []),
                 'header'=>@header('Content-Type: application/json'),
-                'policy'=>@header('Access-Control-Allow-Origin: *') ];
+                'policy'=>@header('Access-Control-Allow-Origin: *') ]);
                 
         @ini_set('zlib.output_compression', 'Off');
         @http_response_code(200);

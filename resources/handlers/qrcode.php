@@ -1,6 +1,5 @@
 <?php
 class qrcode {
-    use \openapi;
 
     private static function info($data=[]) {
         //table with which parameters we do accept
@@ -10,23 +9,26 @@ class qrcode {
             if(!empty($content = ($data[$param] ?? $data))
             &&(is_string($content))) return $content;
         //return what we will code
-        exit(' ');
+        return null;
     }
 
-    public static function __callStatic($name, $data) {
+    public static function __callStatic($name, $data):\route {
         //validade parameters
-        if(empty($content = self::info($data[0] ?? $data))) return;
+        if(empty($content = self::info($data[0] ?? $data))) return response()->json(null);
         //validades which kind of return will it be
-        if($name == 'content') return $content;
+        if($name == 'content') return response()->json($content);
         if($name == 'raw') foreach($data as $arg) if(is_bool($arg) && $arg === false) $name = 'base64';
         if(!in_array($name,['base64','png','raw','text'])) $name = ((($_SERVER['class'] ?? '') == __CLASS__) ? 'png' : 'raw');
         //trigger lib
         try { 
-            if(!empty($qr = phpqr::$name($content, false, QR_ECLEVEL_L, 15,3)))
-            return $qr;
+            if(!empty($type=(($qr = phpqr::$name($content, false, QR_ECLEVEL_L, 15,3))['type'] ?? 'json')))
+                if($type === 'json') return response()->json($qr['data'] ?? '');
+                else if($type === 'png') return response()->exit($qr['data'] ?? '');
         } catch(Exception $err) { }
     }
 }
+
+// Alternatives: https://qrcode.tec-it.com/en/Raw
 
 // START OF THE LIBRARY TO GENERATE qrcode (FROM LINE 30)
 //
@@ -2176,16 +2178,16 @@ class qrcode {
 
         public static function png(...$params) {
             header('Content-Type: image/png');
-            return call_user_func_array('self::png_output',$params);
+            return ['type'=>'png', 'data'=>call_user_func_array('self::png_output',$params)];
         }
  
         public static function text($text, $outfile = false, $level = QR_ECLEVEL_L, $size = 3, $margin = 4)  {
             $enc = QRencode::factory($level, $size, $margin);
-            return $enc->encode($text, $outfile);
+            return ['type'=>'json', 'data'=>$enc->encode($text, $outfile)];
         }
  
         public static function raw(...$params) { //$text, $outfile = false, $level = QR_ECLEVEL_L, $size = 3, $margin = 4
-            return "data://image/png;base64,".call_user_func_array('self::base64',$params);
+            return ['type'=>'json', 'data'=>"data://image/png;base64,".(call_user_func_array('self::base64',$params)['data'] ?? '')];
             // $enc = QRencode::factory($level, $size, $margin);
             // return var_dump($enc->encodeRAW($text, $outfile));
         }
@@ -2195,7 +2197,7 @@ class qrcode {
             call_user_func_array('self::png_output',$params);
             $content = @ob_get_contents();
             @ob_end_clean();
-            return base64_encode($content);
+            return ['type'=>'json', 'data'=>base64_encode($content)];
         }
     }
  

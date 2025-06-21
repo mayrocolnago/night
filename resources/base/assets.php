@@ -1,8 +1,5 @@
 <?php
 class assets {
-    use \openapi;
-
-    public static $openapiOnly = ['get'];
 
     public static $allowedMethods = ['html','css','js'];
 
@@ -31,12 +28,12 @@ class assets {
         return $modules;
     }
 
-    public static function get($data=[]) {
+    public static function get($data=[]):\route {
         $root = ($data['namespace'] ?? ($data['name'] ?? ($data['space'] ?? ($data['root'] ?? 'app'))));
         $methods = ($data['methods'] ?? ($data['method'] ?? ($data['types'] ?? ($data['type'] ?? ''))));
         $methods = array_filter(explode(',',@preg_replace('/[^0-9a-zA-Z\,\_]/','',$methods)));
         $retorno = ['result'=>1, 'buffer'=>null];
-        if(!(is_array($modules = self::listmodules(REPODIR.DIRECTORY_SEPARATOR."resources".DIRECTORY_SEPARATOR."$root")))) return false;
+        if(!(is_array($modules = self::listmodules(REPODIR.DIRECTORY_SEPARATOR."resources".DIRECTORY_SEPARATOR."$root")))) return response()->json(false);
         /* load root module first */
         foreach($methods as $method) 
             if(!empty($call = str_replace($root,'',$method)))
@@ -60,7 +57,7 @@ class assets {
                 if(($fn=substr($method,-2)) === 'js' && !empty($retorno[$method] ?? ''))
                     $retorno[$method] .= '<script>$(window).on("onload",function(state){ setTimeout(function(){ core.cls(); },1000); });</script>';
         /* return modules content */
-        return $retorno;
+        return response()->json($retorno);
     }
 
     public static function parselines($data='') {

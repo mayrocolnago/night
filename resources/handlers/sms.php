@@ -8,14 +8,14 @@ class sms {
     private static $loaded = false;
 
     public static function database() {
-        pdo_query("CREATE TABLE IF NOT EXISTS `sms_queue` (
-            `id` int NOT NULL AUTO_INCREMENT,
-            `receipt` varchar(200) NULL DEFAULT NULL,
-            `sender` varchar(200) NULL DEFAULT '',
-            `message` longtext NULL DEFAULT NULL,
-            `response` longtext NULL DEFAULT NULL,
-            `sendat` int DEFAULT '0',
-            PRIMARY KEY (`id`))");
+        return pdo_create("sms_queue",[
+            "id" => "int NOT NULL AUTO_INCREMENT",
+            "receipt" => "varchar(200) NULL DEFAULT NULL",
+            "sender" => "varchar(200) NULL DEFAULT ''",
+            "message" => "longtext NULL DEFAULT NULL",
+            "response" => "longtext NULL DEFAULT NULL",
+            "sendat" => "int DEFAULT '0'"
+        ]);
     }
 
     protected static function load() {
@@ -27,15 +27,15 @@ class sms {
     public function __construct() { return self::load(); }
 
     public static function send($number='',$message='',$sendat=null,$sender='',$queueonly=false) {
-        if($_SERVER['DEVELOPMENT'] ?? false) $queueonly = true;
-        if(!empty($sendat) && !$queueonly) $queueonly = true;
+        if(($_SERVER['DEVELOPMENT'] ?? false) && is_bool($queueonly)) $queueonly = true;
+        if(!empty($sendat) && ($queueonly === false)) $queueonly = true;
         if(!is_string($message)) return -1;
         if(!is_numeric($number = preg_replace('/[^0-9]/','',$number))) return -2;
         if(empty($sendat) || !is_numeric($sendat)) $sendat = strtotime('now');
         if(function_exists('rmA')) if(empty($message = rmA(strip_tags($message)))) return -3;
         if(!empty(pdo_fetch_row("SELECT id FROM sms_queue WHERE (receipt='$number' or receipt='55$number') AND sendat > ".strtotime('-1 minute')." AND sendat < ".strtotime('+1 minute')))) return 1.1;
         $result = pdo_insert('sms_queue',['receipt'=>$number, 'sender'=>$sender, 'message'=>$message, 'sendat'=>$sendat]);
-        if(!$result && $queueonly !== 'database') return self::database(self::send($number,$message,$sendat,$sender,'database'));
+        if(!$result && !is_array($queueonly)) return self::send($number,$message,$sendat,$sender,self::database());
         if(!$queueonly) self::async(function(){ \sms::process_queue(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }

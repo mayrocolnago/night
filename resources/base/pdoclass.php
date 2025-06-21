@@ -1,6 +1,6 @@
 <?php
 /**
- * PDOCLASS for old mysql_functions
+ * PDOCLASS as a seamless replacement of old mysql_functions
  * Method:
  *   **STATICLY MAIN/LOCAL CONNECTIONS**
  *     - (index already tries to start the default connection for static callings automatically)
@@ -81,10 +81,11 @@ class pdoclass {
 		if($statm == null) return 0;
 		if(!isset($statm['q'])) return 0;
 		try { 
-		  @$statm['q']->execute($statm['v'] ?? []);
-		  return (@$statm['q']->rowCount() ?? 0);
-		} catch (PDOException $e) { 
-		  return 0; 
+		  	@$statm['q']->execute($statm['v'] ?? []);
+		  	return (@$statm['q']->rowCount() ?? 0);
+		} catch (PDOException $e) {
+			pdo_log($statm, $e);
+		  	return 0; 
 		} 
 	}
 
@@ -99,6 +100,7 @@ class pdoclass {
 				$r = $this->recursive_jsonconvert($r, true);
 			return $r;
 		} catch (PDOException $e) {
+			pdo_log($statm, $e);
 			return array(); 
 		} 
 	}
@@ -114,11 +116,13 @@ class pdoclass {
 				$r = $this->recursive_jsonconvert($r, false);
 			return $r;
 		} catch (PDOException $e) { 
+			pdo_log($statm, $e);
 			return array(); 
 		} 
 	}
 
 	public function pdo_create($table,$fields=[],$primarykey=null,$more=[]) {
+		if(empty($table)) return [];
 		if(empty($fields)) return [];
         $this->pdo_query("CREATE TABLE IF NOT EXISTS `$table` (
             ".implode("\n",array_map(function($a,$b){ return "`$a` $b,"; },array_keys($fields),array_values($fields)))."
@@ -150,15 +154,33 @@ class pdoclass {
 				   : $statm; 
 		} catch (PDOException $e) {
 			$_SERVER['PDO_LAST_ERROR'] = (@$e->getMessage());
-			if(@$_GET['debug'] == "2") echo "<!-- Error: " . @$e->getMessage() . " -->";
+			//echo "<!-- Error: " . @$e->getMessage() . " -->";
+			pdo_log(($statm ?? []), $e);
 			return null;
 		} 
 	}
 
+	public function pdo_log($statm, $eo = null, $force = false) {
+		if((!$force) && (!($_SERVER['DEVELOPMENT'] ?? false)) && (!($_SERVER['pdo_enable_logquery'] ?? false))) return null;
+		if(!($pdodb = $this->pdo_isconnected())) return null;
+		try { $this->database(); $e = $eo; if(is_array($e) || is_object($e)) $e = json_encode($e);
+			if(($clear = @$pdodb->prepare("select count(*) qtd from log_query"))->execute())
+				if(($qtd = intval($clear->fetchAll()[0]['qtd'] ?? -1)) > 1000)
+					@$pdodb->prepare("delete from log_query order by id asc limit 100")->execute();
+			if((!empty($statm['s'] ?? '')) && is_string($statm['s'] ?? ''))
+				if(!(strpos(preg_replace('/[^a-z]/','',strtolower(explode(' ',trim($statm['s']))[0] ?? '')),'set') !== false))
+						@$pdodb->prepare("INSERT INTO log_query (query, parameters, response, runat) VALUES (:q, :p, :r, :t)")
+							->execute(['q'=>($statm['s'] ?? null), 'p'=>json_encode($statm['v'] ?? []), 
+										'r'=>($statm['d'] ?? ($e ?? null)), 't'=>strtotime('now')]);
+		} catch (PDOException $e) { } 
+		return $eo; 
+	}
+
+
 	public function pdo_prepare($select) {
 		if(!($pdodb = $this->pdo_isconnected())) return null;
 		try { $statm = $pdodb->prepare($select); } 
-		catch (PDOException $e) { if(@$_GET['debug'] == "2") echo "<!-- Error: " . @$e->getMessage() . " -->"; $_SERVER['PDO_LAST_ERROR'] = (@$e->getMessage()); }
+		catch (PDOException $e) { $_SERVER['PDO_LAST_ERROR'] = (@$e->getMessage()); }
 		return $statm; 
 	}
 

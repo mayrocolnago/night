@@ -8,13 +8,18 @@
         <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover, maximum-scale=1.0, user-scalable=0">
         <meta name="color-scheme" content="light dark">
         <link href="css/jquery-ui.min.css" rel="stylesheet">
+        <script src="cordova.js"></script>
+        <script src="js/jquery.min.js"></script>
+        <script src="js/jquery-ui.min.js"></script>
+        <script src="js/jquery.mask.min.js"></script>
+        <script src="js/firebase.js"></script>
         <title></title>
         <style>
             * { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 
             /* @font-face { font-family: Poppins; src:url("font/Poppins/Poppins-Regular.ttf"); font-display: block; } */
 
-            html,body { background-color:#151515; }
+            html,body { background-color:#151515; color:#e6e6e6; }
 
             body, .fullscreen {
                 overflow:auto;
@@ -38,12 +43,6 @@
             .coreprogress .determinate { background-color:#212420; position:absolute; top:0px; bottom:0px; left:0px; border-radius:20px; }
             .coreappsplash { position:absolute; left:50%; top:50%; height:50px; width:225px; text-align:center; padding:0px 0px 0px 0px; margin:-115px 0px 0px -112px; }
         </style>
-        
-        <script src="cordova.js"></script>
-        <script src="js/jquery.min.js"></script>
-        <script src="js/jquery-ui.min.js"></script>
-        <script src="js/jquery.mask.min.js"></script>
-        <script src="js/firebase.js"></script>
     </head>
     <body>
         <div id="app" class="fullscreen" style="display:none;"></div>

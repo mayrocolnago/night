@@ -17,17 +17,16 @@ class push {
     ];
 
     public static function database() {
-        pdo_query("CREATE TABLE IF NOT EXISTS `push_queue` (
-            `id` int NOT NULL AUTO_INCREMENT,
-            `uid` varchar(200) NULL DEFAULT NULL,
-            `titulo` varchar(100) NULL DEFAULT NULL,
-            `mensagem` longtext NULL DEFAULT NULL,
-            `comando` longtext NULL DEFAULT NULL,
-            `tags` longtext NULL DEFAULT NULL,
-            `response` longtext NULL DEFAULT NULL,
-            `send_at` int NULL DEFAULT '0',
-            PRIMARY KEY (`id`)
-        )");
+        return pdo_create("push_queue",[
+            "id" => "int NOT NULL AUTO_INCREMENT",
+            "uid" => "varchar(200) NULL DEFAULT NULL",
+            "titulo" => "varchar(100) NULL DEFAULT NULL",
+            "mensagem" => "longtext NULL DEFAULT NULL",
+            "comando" => "longtext NULL DEFAULT NULL",
+            "tags" => "longtext NULL DEFAULT NULL",
+            "response" => "longtext NULL DEFAULT NULL",
+            "send_at" => "int NULL DEFAULT '0'"
+        ]);
     }
 
     protected static function load() {
@@ -40,8 +39,8 @@ class push {
     public function __construct() { return self::load(); }
 
     public static function send($to=null,$body=null,$msg=null,$title=null,$send_at=null,$tags=null,$queueonly=false) {
-        if($_SERVER['DEVELOPMENT'] ?? false) $queueonly = true;
-        if(!empty($send_at) && !$queueonly) $queueonly = true;
+        if(($_SERVER['DEVELOPMENT'] ?? false) && is_bool($queueonly)) $queueonly = true;
+        if(!empty($send_at) && ($queueonly === false)) $queueonly = true;
         if(empty($send_at) || !is_numeric($send_at)) $send_at = strtotime('now');
         if(empty($to)) return 0;
         $result = pdo_insert("push_queue",[
@@ -49,7 +48,7 @@ class push {
             'titulo' => (empty($title) ? null : rmAentities($title)),
             'mensagem' => rmAentities($body ?? ''),
             'comando' => $msg, 'send_at' => $send_at ]);
-        if(!$result && $queueonly !== 'database') return self::database(self::send($to,$body,$msg,$title,$send_at,$tags,'database'));
+        if(!$result && !is_array($queueonly)) return self::send($to,$body,$msg,$title,$send_at,$tags,self::database());
         if(!$queueonly) self::async(function(){ \push::process_queue(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }

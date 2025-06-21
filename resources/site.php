@@ -1,8 +1,7 @@
 <?php
 class site {
-    use \openapi;
 
-    public static function index($data) { //this will be called if nothing goes after /
+    public static function index($data):\route { //this will be called if nothing goes after /
         ?><body style="background-color:#111;color:#FFF;">
             <h1>Hello world</h1>
             <p>
@@ -15,7 +14,7 @@ class site {
         </div><?php
     }
 
-    public static function pagename($data) { //this will be called if url ends with /site/pagename
+    public static function pagename($data):\route { //this will be called if url ends with /site/pagename
         ?><div>
             Another page. <a href="/">Go back</a>
         </div><?php

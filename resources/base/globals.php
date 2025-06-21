@@ -2,13 +2,12 @@
 class globals {
 
   public static function database() {
-      pdo_query("CREATE TABLE IF NOT EXISTS global_configs (
-        id bigint(20) NOT NULL AUTO_INCREMENT,
-        ckey varchar(100) NOT NULL,
-        cvalue longtext NULL,
-        updated_at bigint(20) NULL DEFAULT '0',
-        PRIMARY KEY (id),
-        UNIQUE KEY (ckey))");
+      return pdo_create("global_configs",[
+        "id" => "bigint(20) NOT NULL AUTO_INCREMENT",
+        "ckey" => "varchar(100) NOT NULL",
+        "cvalue" => "longtext NULL",
+        "updated_at" => "bigint(20) NULL DEFAULT '0'"
+      ],"id",[ "UNIQUE KEY (ckey)" ]);
   }
 
   /* simpler but stronger version of curl function */
@@ -61,6 +60,72 @@ class globals {
           if(is_dir(realpath($path.'/'.$item))) self::listmodules($path.'/'.$item.'/', $modules);
           else $modules[] = preg_replace('/[^a-z]/','',str_ireplace('.php','',$item));
     return $modules;
+  }
+
+  /* JWT hash generator */
+  public static function jwt_encode($payload=[], $header=512, $secret=null) {
+    if(!is_array($header)) $header = [ "alg"=>"HS".((is_numeric($header)) ? $header : 512), "typ"=>"JWT" ];
+    if(empty($sha = @preg_replace('/[^0-9]/','',($header['alg'] ?? '')))) $sha = "512";
+    if(!is_array($payload ?? '')) $payload = [];
+    $payload['iat'] = strtotime('now');
+    $base64_url_encode = function($text) { return str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($text)); };
+    $secret = ($secret ?? ($_SERVER['signature'] ?? ($_SERVER['SIGNATURE'] ?? ($_SERVER['secret'] ?? ($_SERVER['SECRET'] ?? md5(REPODIR))))));
+    $header = $base64_url_encode(json_encode($header));
+    $payload = $base64_url_encode(json_encode($payload));
+    $signature = $base64_url_encode(hash_hmac("sha$sha", "$header.$payload", $secret, true));
+    $jwt = "$header.$payload.$signature";
+    return $jwt;
+  }
+
+  /* JWT decoder */
+  public static function jwt_decode($hash='', $secret=null) {
+    if(empty($hash)) return [];
+    $base64_url_decode = function($text) {
+        if($remainder = (strlen($text) % 4)) $text .= str_repeat('=', ($padlen = (4 - $remainder)));
+        return base64_decode(str_replace(['-', '_'], ['+', '/'], $text));
+    };
+    if(substr($hash,0,4) === 'jwt.') $hash = substr($hash,4);
+    if(!is_array($parts = explode('.', $hash))) return [];
+    if(count($parts) !== 3) return [];
+    list($header_b64, $payload_b64, $signature_b64) = $parts;
+    $header = json_decode($base64_url_decode($header_b64), true);
+    $payload = json_decode($base64_url_decode($payload_b64), true);
+    $secret = ($secret ?? ($_SERVER['signature'] ?? ($_SERVER['SIGNATURE'] ?? ($_SERVER['secret'] ?? ($_SERVER['SECRET'] ?? md5(REPODIR))))));
+    if(!$header || !$payload) return [];
+    if($hash !== self::jwt_encode($payload, $header, $secret)) return [];
+    return ['header'=>$header, 'payload'=>$payload];
+  }
+
+  /* base32 decode for 2fa totp codes */
+  function base32Decode($input='') {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $input = strtoupper($input);
+    $length = strlen($input);
+    $bits = '';
+    for ($i = 0; $i < $length; $i++) {
+        $char = $input[$i];
+        $pos = strpos($alphabet, $char);
+        if($pos === false) return false;
+        $bits .= str_pad(decbin($pos), 5, '0', STR_PAD_LEFT); }
+    $result = '';
+    $bitsLength = strlen($bits);
+    for($i = 0; $i < $bitsLength; $i += 8)
+        if($i + 8 <= $bitsLength) {
+            $byte = substr($bits, $i, 8);
+            $result .= chr(bindec($byte)); }
+    return $result;
+  }
+
+  /* base32 encode for 2fa totp codes */
+  function base32Encode($data='') {
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $bits = ''; $result = '';
+    for($i = 0; $i < strlen($data); $i++) $bits .= str_pad(decbin(ord($data[$i])), 8, '0', STR_PAD_LEFT);
+    for($i = 0; $i < strlen($bits); $i += 5) {
+        $chunk = substr($bits, $i, 5);
+        if(strlen($chunk) < 5) $chunk = str_pad($chunk, 5, '0', STR_PAD_RIGHT);
+        $result .= $alphabet[bindec($chunk)]; }
+    return $result;
   }
 
   /* make sure variables are arrays */
@@ -131,15 +196,15 @@ class globals {
 
   /* cookie functions */
   public static function delcookie($key) {
-    @setcookie($key, '', (strtotime('now')-1), '/', ($_SERVER['SERVER_NAME'] ?? ""), false, false);
-    unset($_COOKIE[$key]);
+    try { @setcookie($key, '', (strtotime('now')-1), '/', ($_SERVER['SERVER_NAME'] ?? ""), false, false); } catch(Exception $e) { }
+    try { unset($_COOKIE[$key]); } catch(Exception $e) { }
     return '';
   }
 
   public static function savecookie($key,$cvalue='',$tempo='auto') {
     if($tempo == 'auto') $tempo = strtotime("+1 year");
     if(isset($_COOKIE[$key])) self::delcookie($key);
-    @setcookie($key, ($_COOKIE[$key] = $cvalue), $tempo, '/', ($_SERVER['SERVER_NAME'] ?? ""), false, false);
+    try { @setcookie($key, ($_COOKIE[$key] = $cvalue), $tempo, '/', ($_SERVER['SERVER_NAME'] ?? ""), false, false); } catch(Exception $e) { }
     return $cvalue;
   }
 
@@ -257,8 +322,15 @@ class globals {
   }
 
   /* shows my ip */
-  public static function myip() {
-    return ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+  public static function remote_addr($default='0.0.0.0') {
+    if(!empty($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''))
+        return $_SERVER['HTTP_CF_CONNECTING_IP'];
+    
+    if(!empty($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''))
+        if(!empty($xfr = (explode(',', ($_SERVER['HTTP_X_FORWARDED_FOR'].','))[0] ?? '')))
+           return $xfr;
+    
+    return ($_SERVER['HTTP_X_REAL_IP'] ?? ($_SERVER['REMOTE_ADDR'] ?? $default));
   }
     
   /* language functions */
@@ -310,6 +382,7 @@ class globals {
   public static function emojientities($string='') {
     $stringBuilder = "";
     $offset = 0;
+    if(!is_string($string)) return $string;
     if(empty($string)) return "";
     /* conversao */
     while ( $offset >= 0 ) {
@@ -613,43 +686,49 @@ class globals {
       $(window).on('onload',function(state){
 
           if($('.autouploadtosrc').length)
-            loadScript(serveraddress + 'storage/upload.js?v=3',function(){ 
+            if(function_exists('bindupload')){ 
               $('.autouploadtosrc').each(function(index,elem){ 
                 var ide = $(elem).attr('id');
                 var ideuper = '#'+ide+'_uploader';
-                  if(!($(ideuper).length)) {
+                if($(elem).attr('type') === 'file') ideuper = '#'+ide;
+                else if(!($(ideuper).length)) {
                     $('body').append(`<form style="overflow:hidden;transform:translate(-9999999px,-999999px);"><input type="file" id="${ide+'_uploader'}"></form>`);
-                    $('#'+ide).attr('for',String(ideuper).replace('#','')).attr('onclick',`$('${ideuper}').click();`+($('#'+ide).attr('onclick') || ''));
-                  }
-                  var paramset = { 'f': 'foto', 'p': '/', 'e': 'jpeg' };
-                  try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
-                    paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
-                  bindupload(ideuper, paramset,
-                  function (onstart) { $(elem).addClass('loadblink');
-                      try {
-                        upfilebs4 = "";
-                        var reader = new FileReader();
-                        reader.readAsDataURL(onstart.filedata.get('file'));
-                        reader.onload = function () {
-                          upfilebs4 = reader.result };
-                        reader.onerror = function (error) {
-                          console.log('error on reader', error); };
-                      } catch(e) { console.log('error on bs4',e) }
-                      $(elem).attr('src','img/transparent.png').show();
-                      setTimeout(function(){ $(elem).removeClass('loadblink'); },5678);
-                  }, function (ondone) {
-                      if(ondone.result !== "") return $(elem).attr('src',ondone.url).removeClass('loadblink');
-                      if(upfilebs4 === "") return $(elem).attr('src','error').removeClass('loadblink');
-                      console.log('Error transmiting file. Starting alternative counter measures...');
-                      var paramset = { 'f':'file4', 'p':'/', 'e':'jpeg', 'base64':'1', 'file':upfilebs4 };
-                      try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
-                        paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
-                      curlsend('storage/send', paramset, function(fup){
-                        console.log('Sent by base64', JSON.stringify(fup));
-                        $(elem).attr('src',fup.url); },function(error){ $(elem).attr('src','error'); },
-                        function(always){ $(elem).removeClass('loadblink'); });
-                  }); });
-            });
+                    $('#'+ide).attr('for',String(ideuper).replace('#','')).attr('onclick',`$('${ideuper}').click();`+($('#'+ide).attr('onclick') || '')); }
+                var paramset = { 'f': 'upload', 'p': '/', };
+                try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
+                  paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
+                if(empty($(elem).attr('src'))) $(elem).attr('src','img/uploadicon.png');
+                bindupload(ideuper, paramset,
+                function (onstart) { $(elem).addClass('loadblink');
+                    eventfire('autouploadtosrc_onstart',{'elemid':ide});
+                    try {
+                      upfilebs4 = "";
+                      var reader = new FileReader();
+                      reader.readAsDataURL(onstart.filedata.get('file'));
+                      reader.onload = function () {
+                        upfilebs4 = reader.result };
+                      reader.onerror = function (error) {
+                        console.log('error on reader', error); };
+                    } catch(e) { console.log('error on bs4',e) }
+                    $(elem).attr('src','img/transparent.png').show();
+                    setTimeout(function(){ $(elem).removeClass('loadblink'); },5678);
+                }, function (ondone) {
+                    if(ondone.result !== "") {
+                      $(elem).attr('src',ondone.url).removeClass('loadblink');
+                      eventfire('autouploadtosrc_ondone',{'elemid':ide});
+                      return $(elem); }
+                    if(upfilebs4 === "") return $(elem).attr('src','error').removeClass('loadblink');
+                    console.log('Error transmiting file. Starting alternative counter measures...');
+                    var paramset = { 'f':'file4', 'p':'/', 'base64':'1', 'file':upfilebs4 };
+                    try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
+                      paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
+                    curlsend(upstoragedefaultsend+'send', paramset, function(fup){
+                        $(elem).attr('src',fup.url);
+                        eventfire('autouploadtosrc_ondone',{'elemid':ide}); },
+                      function(error){ $(elem).attr('src','error'); },
+                      function(always){ $(elem).removeClass('loadblink'); });
+                }); });
+            }
 
           $('*[nextfield]').on("keyup",function(e){ 
               if(e.which !== 13) return;
@@ -732,6 +811,8 @@ class globals {
                 cursordown = false;
               }).mouseleave(end); } catch(err) { }
 
+          curlsend_default_params['token'] = function(){ let token = ''; token = ((empty(token = getitem('token'))) ? $_cookie('token') : token); };
+          curlsend_default_params['deviceauth'] = function(){ let dauth = ''; dauth = ((empty(dauth = getitem('deviceauth'))) ? $_cookie('deviceauth') : dauth); };
       });
 
       /* footing class alignment */
@@ -881,7 +962,7 @@ class globals {
         if(typeof def == 'undefined') def = '';
         if(!((['uid', 'screen']).includes(qual)))
           if(String(qual).indexOf('@') > -1) qual = String(qual).replace('@','');
-          else qual += "_"+String(window.localStorage.getItem('uid'));
+          else qual += "_"+String(window.localStorage.getItem('uid')).replace('null','0');
         var rt = window.localStorage.getItem(qual);
         rt = ((rt == undefined) || (rt == null) || (rt == '')) ? def : rt;
         if(rt.indexOf('@array/object@') > -1) rt = JSON.parse(rt.replace('@array/object@',''));
@@ -982,30 +1063,24 @@ class globals {
        * @param {function} error - Callback function to execute on error
        * @param {function} always - Callback function that will always be called after success and error
        * @param {number} timeout - Timeout in milliseconds (zero for none)
-       * @param {boolean/string} cachectl - If true, adds a timestamp to the URL to prevent caching. If "cache" it will rapidly return the cached value
+       * @param {boolean/string} cachectl - If true, adds a timestamp to the URL to prevent caching. If string "cache" it will rapidly return the cached value
        * @param {string} reqtype - (default application/x-www-form-urlencoded) - Type of request (multipart/form-data, application/json)
        * @param {boolean} cors - (default false) If true, it will use CORS to send the request (cross-origin resource sharing)
        */
-      var curl_default_params = {};
+      var curlsend_default_params = {};
       function curlsend(url,params,success,error,always,timeout,cachectl,reqtype,cors) {
+        let reqmethod = ((String(params).toLowerCase() === 'null' || typeof params === 'undefined') ? 'GET' : 'POST');
         reqtype = reqtype || 'application/x-www-form-urlencoded';
         cachectl = cachectl || false;
         cors = cors || false;
-        let token = getitem('token');
-        let dauth = getitem('deviceauth');
-        let pushid = getitem('@pushid');
-        if(typeof params === 'null' || typeof params === 'undefined') params = {}; 
-        if(!(typeof params !== 'object' && typeof params !== 'array')) {
-          try { params = { ...params, ...curl_default_params }; } catch(e) { }
-          if(token !== '') params.actk = token;
-          if(dauth !== '') params.deviceauth = dauth;
-          if(pushid !== '') params.pushid = pushid;
-          if(cachectl === true) params.t = (new Date().getTime()); }
-        else if(typeof params === 'string') {
-                if(token !== '') params += '&actk='+token;
-                if(dauth !== '') params += '&deviceauth='+dauth;
-                if(cachectl === true) params += '&t='+(new Date().getTime()); }
-        try { if(token !== $_cookie('actk') && delcookie('actk')) savecookie('actk',token); } catch (err) { }
+        if(typeof params !== 'object') params = {};
+        if(cachectl === true) params.t = (new Date().getTime());
+        Object.keys(curlsend_default_params).forEach(function(key) {
+            if(key in params) return; try {
+              if(typeof curlsend_default_params[key] === 'function')
+                   params[key] = curlsend_default_params[key]();
+              else params[key] = curlsend_default_params[key];
+            } catch(err) { } });
         var e = String('//'+(String(url+'?').split('?')[0])).split('/');
             e = e[e.length-2]+e[e.length-1];
         var successfn = function(d,p){ try { if(typeof success === 'function') success(d,p); } catch(err) { } };
@@ -1028,7 +1103,7 @@ class globals {
               return curlsend(url,params,success,error,always,timeout,cachestorage[cachecode],reqtype,cors); } }
         var ajaxOptions = {
           url: ((String(url).indexOf('//') < 0) ? serveraddress + url : url),
-          method: 'POST',
+          method: reqmethod,
           contentType: reqtype,
           crossDomain: cors
         };
@@ -1069,6 +1144,12 @@ class globals {
             if(!(typeof cachectl === 'object' || typeof cachectl === 'array'))
               alwaysfn(data,params,errorfn(data,params));
           });
+      }
+
+      /* similar function from http_build_query on php */
+      function http_build_query(obj) {
+        let params = new URLSearchParams(obj);
+        return params.toString();  
       }
 
       /* similar function from date on php */
@@ -1370,6 +1451,24 @@ class globals {
         const document = new String(data).replace(/[^\d]/g, "");
         if(document.length <= 12) return document.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
         else return document.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+      }
+
+      function brazil_get_cep(el) {
+        let value = $(el).val();
+        if(empty(value)) return;
+        $.getJSON(`https://viacep.com.br/ws/${value}/json/`,function(data) {
+          if(!data) return;
+          let parent = $(el).closest('form, .content, .heading');
+          $(parent).find('input[id$="logradouro"]').val(data['logradouro']);
+          $(parent).find('input[id$="bairro"]').val(data['bairro']);
+          $(parent).find('input[id$="cidade"]').val(data['localidade']);
+          $(parent).find('input[id$="estado"]').val(data['uf']);
+          try { if(empty(data['estado'])) return $(parent).find('input[id$="uf"]').focus(); } catch(e) { }
+          try { if(empty(data['localidade'])) return $(parent).find('input[id$="cidade"]').focus(); } catch(e) { }
+          try { if(empty(data['bairro'])) return $(parent).find('input[id$="bairro"]').focus(); } catch(e) { }
+          try { if(empty(data['logradouro'])) return $(parent).find('input[id$="logradouro"]').focus(); } catch(e) { }
+          try { return $(parent).find('input[id$="numero"]').focus(); } catch(e) { }
+        });
       }
     </script><?php 
   }

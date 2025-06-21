@@ -1,7 +1,7 @@
 <?php
 class desktop {
 
-    public static function css($data=[]) { ?><style>
+    public static function css() { ?><style>
 
         #desktopsize_controller { flex-shrink: 0; }
 
@@ -27,11 +27,11 @@ class desktop {
         </style><?php
     }
 
-    public static function html($data=[]) { 
+    public static function html() { 
         ?><div id="desktopsize_controller" style="display:none;"></div><?php
     }
 
-    public static function js($data=[]) { ?><script>
+    public static function js() { ?><script>
         var defaultswitchtabinterval = switchtabinterval;
 
         function maindesktopsize() {

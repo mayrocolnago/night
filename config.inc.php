@@ -13,4 +13,8 @@ $allowed_domains = [
     '*'
 ];
 if(in_array(($httporg='*'), $allowed_domains) || in_array(($httporg=($_SERVER['HTTP_ORIGIN'] ?? [])), $allowed_domains))
-    header('Access-Control-Allow-Origin: '.$httporg);
+    $_SERVER['headerCORS'] = $httporg;
+
+//set timezone
+@date_default_timezone_set('America/Sao_Paulo');
+@session_start();

@@ -1,16 +1,16 @@
 <?php
 class tabler {
 
-    public static function index($data='class') {
-        if(!is_string($data)) return;
-        if(!class_exists($data)) return;
+    public static function index($request='class') {
+        if(!is_string($request)) return;
+        if(!class_exists($request)) return;
         return str_replace(['<div id="app"','<div id="coreloading"'],
             ['<div class="page"><div class="page-wrapper"><div class="page-body" id="app"',
             '</div></div><div id="coreloading"'],
-            \assets::show($data));
+            \assets::show($request));
     }
 
-    public static function css($data=[]) {
+    public static function css() {
         ?><style>
             .tabler-body-initialize {
                 display: none !important;
@@ -21,16 +21,18 @@ class tabler {
             .nav-item.separator { user-select: none; pointer-events: none; }
             .nav-item.separator hr { margin:0.5rem 0; opacity:0.1; }
         </style><?php
-        echo \globals::css();
-        echo \desktop::css();
+        \globals::css();
+        \desktop::css();
     }
 
-    public static function html($data=[]) {
+    public static function html() {
         ?><div id="home" class="screen" style="display:none;"></div><?php
     }
 
-    public static function js($data=[]) {
+    public static function js() {
         ?><script>
+            try { $('body').addClass('tabler-body-initialize'); } catch(err) { }
+
             $(window).on('tabler_onload', function(state){
                 if(!($('.tablerbar-menu-initialize').length)) return;
                 $('.tablerbar-menu-initialize').removeClass('tablerbar-menu-initialize');
@@ -56,11 +58,9 @@ class tabler {
             });
         </script>
         <?php
-        echo \globals::js();
-        echo \desktop::js();
-        echo \icons::js();
-
-        if(module_exists('storage::upload')) echo \storage::upload(['_js' => true]);
+        \globals::js();
+        \desktop::js();
+        \icons::js();
     }
 
 }

@@ -2,11 +2,10 @@
 
 class cron {
     use \thread;
-    use \openapi;
 
     public static $code = null;
 
-    public static function run($data=[]) {
+    public static function run($data=[]):\route {
         //verify parameters and permissions
         if(intval($data['code'] ?? '') !== (self::$code ?? ($_SERVER['cron_code'] ?? ''))) return ['result'=>false, 'err'=>'not permited'];
         if(!($active = intval(getconfig('cron_enabled',0)))) return ['result'=>false, 'err'=>'disabled'];

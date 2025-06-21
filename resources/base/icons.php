@@ -1,11 +1,10 @@
 <?php
 class icons {
-    use \openapi;
 
     public static $default = 'regular/square';
 
 
-    public static function get($data=[]) {
+    public static function get($data=[]):\route {
         @header('Access-Control-Allow-Origin: *');
         
         if(!is_string($icon = ($data['name'] ?? ($data['path'] ?? $data)))) $icon = self::$default;
@@ -16,7 +15,7 @@ class icons {
     }
 
 
-    public static function js($data=[]) { ?><script>
+    public static function js() { ?><script>
             var icons_processed = [];
 
             function print_icons() {

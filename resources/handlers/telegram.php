@@ -1,7 +1,6 @@
 <?php
 class telegram {
     use \thread;
-    use \openapi;
 
     public static $openapiOnly = ['callback']; // Add `bot` and `group` to get bot informations if necessary
 
@@ -23,16 +22,16 @@ class telegram {
     ';
 
     public static function database() {
-        pdo_query("CREATE TABLE IF NOT EXISTS `telegram_queue` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `chatid` varchar(200) DEFAULT NULL,
-            `message` longtext DEFAULT NULL,
-            `response` longtext DEFAULT NULL,
-            `botkey` longtext DEFAULT NULL,
-            `method` varchar(200) NULL DEFAULT 'sendMessage',
-            `params` longtext NULL DEFAULT NULL,
-            `sendat` int(11) DEFAULT 0,
-            PRIMARY KEY (`id`))");
+        return pdo_create("telegram_queue",[
+            "id" => "int(11) NOT NULL AUTO_INCREMENT",
+            "chatid" => "varchar(200) DEFAULT NULL",
+            "message" => "longtext DEFAULT NULL",
+            "response" => "longtext DEFAULT NULL",
+            "botkey" => "longtext DEFAULT NULL",
+            "method" => "varchar(200) NULL DEFAULT 'sendMessage'",
+            "params" => "longtext NULL DEFAULT NULL",
+            "sendat" => "int(11) DEFAULT 0"
+        ]);
     }
 
     protected static function load() {
@@ -59,43 +58,45 @@ class telegram {
 
     private static function urlendpoint() { return THISURL.'/'.__CLASS__; }
 
-    public static function configure($data=[]) {
-        if(!self::load()) return false;
-        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($data['hash'] ?? '') !== md5(self::$botapi)) return false;
+    public static function configure($data=[]):\route {
+        if(!self::load()) return response()->json(false);
+        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($data['hash'] ?? '') !== md5(self::$botapi)) return response()->json(false);
         $url = self::urlendpoint().'/callback?hash='.($tk=md5(self::$botapi));
-        return [
+        return response()->json([
             'response'=>self::api('setWebhook',[ 'url' => $url ]),
             'url'=>str_replace($tk,'***',$url)
-        ];
+        ]);
     }
 
-    public static function bot($data=[]) {
-        if(!self::load()) return false;
-        return self::api('getMe');
+    public static function bot($data=[]):\route {
+        if(!self::load()) return response()->json(false);
+        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($request['hash'] ?? '') !== md5(self::$botapi)) return response()->json(false);
+        return response()->json(self::api('getMe'));
     }
 
-    public static function groups($data=[]) {
-        if(!self::load()) return false;
-        return self::api('getUpdates');
+    public static function groups($data=[]):\route {
+        if(!self::load()) return response()->json(false);
+        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($request['hash'] ?? '') !== md5(self::$botapi)) return response()->json(false);
+        return response()->json(self::api('getUpdates'));
     }
 
-    public static function disable($data=[]) {
-        if(!self::load()) return false;
-        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($data['hash'] ?? '') !== md5(self::$botapi)) return false;
-        return self::api('deleteWebhook');
+    public static function disable($data=[]):\route {
+        if(!self::load()) return response()->json(false);
+        if((!($_SERVER['DEVELOPMENT'] ?? false)) && ($request['hash'] ?? '') !== md5(self::$botapi)) return response()->json(false);
+        return response()->json(self::api('deleteWebhook'));
     }
 
-    public static function update($data=[]) {
+    public static function update($data=[]):\route {
         $commandslist = self::$commandslist;
         $ls = explode("\n",trim($commandslist));
         $response = [];
         foreach($ls as $line)
             if(is_array($line = explode(' - ',trim($line))))
                 $response[] = ['command' => ($line[0] ?? ''), 'description' => ($line[1] ?? 'N/D')];
-        return [
+        return response()->json([
             'response'=>self::api('setMyCommands',[ 'commands' => $response ]),
-            'commands'=>$response
-        ];
+            'commands'=>((!($_SERVER['DEVELOPMENT'] ?? false)) ? count($response) : $response)
+        ]);
     }
 
     public static function process_queue($data=[], $log=[]) {
@@ -147,8 +148,8 @@ class telegram {
     }
 
     public static function send($message='',$chatid=null,$method='sendMessage',$params=[],$sendat=null,$queueonly=false) {
-        //if($_SERVER['DEVELOPMENT'] ?? false) $queueonly = true;
-        if(!empty($sendat) && !$queueonly) $queueonly = true;
+        if(($_SERVER['DEVELOPMENT'] ?? false) && is_bool($queueonly)) $queueonly = true;
+        if(!empty($sendat) && ($queueonly === false)) $queueonly = true;
         if(empty($params['photo'] ?? '') && (!is_string($message) || empty($message))) return -1;
         if(empty($sendat) || !is_numeric($sendat)) $sendat = strtotime('now'); $params['sent'] = strtotime('now');
         if(!empty($bp=($params['buttons'] ?? '')) && !empty($params['reply_markup'] = ['inline_keyboard' => ($params['buttons'] = [])]))
@@ -156,7 +157,7 @@ class telegram {
         //protecao de pegar o id, pra nao deixar duplicar
         if(!empty($lastid = (pdo_fetch_row("SELECT id FROM telegram_queue ORDER BY id DESC LIMIT 1")['id'] ?? null))) $lastid++;
         $result = pdo_insert("telegram_queue", ['id'=>$lastid, 'message'=>rmAentities($message ?? ''), 'chatid'=>$chatid, 'method'=>$method, 'params'=>$params, 'sendat'=>$sendat]);
-        //if(!$result && $queueonly !== 'database') return self::database(self::send($message,$chatid,$method,$params,$sendat,'database'));
+        if(!$result && !is_array($queueonly)) return self::send($message,$chatid,$method,$params,$sendat,self::database());
         if(!$queueonly) self::async(function(){ \telegram::process_queue(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
@@ -170,32 +171,32 @@ class telegram {
         return true;
     }
 
-    /* # If callback needed for commands use openapi */
+    /* # If callback needed for commands use this route */
 
-    public static function callback($data=[]) {
-        if(!self::load()) return false;
-        if(md5(self::$botapi) !== ($data['hash'] ?? '')) return -405;
-        if(is_array($data['callback_query'] ?? ''))
-            if(!empty($cqd=($data['callback_query']['data'] ?? '')))
-                $data['message'] = ['text'=>$cqd, 'from'=>($data['callback_query']['from'] ?? ''), 'chat'=>($data['callback_query']['message']['chat'] ?? ''),
-                                    'from_reply'=>($data['callback_query']['message']['reply_markup']['inline_keyboard'] ?? '')];
-        if(empty($msg = (str_replace('\\','',($data['message']['text'] ?? ($data['msg'] ?? '')))))) return ['result'=>-1, 'data'=>$data];
-        if(empty($chatlog = self::$chatlog = ($data['message']['chat']['id'] ?? self::$chatlog))) return ['result'=>-2, 'data'=>$data];
-        if(empty($from = ($data['message']['from']['id'] ?? '*'))) return ['result'=>-3, 'data'=>$data];
-        if(empty($cmd = preg_split('~(?:\'[^\']*\'|"[^"]*")(*SKIP)(*F)|\h+~', $msg))) return ['result'=>-4, 'data'=>$data];
-        if(empty($cmd[0] ?? '')) return ['result'=>-5, 'data'=>$data];
-        if(empty($cmd[0] = (explode('@',($cmd[0]."@"))[0] ?? ''))) return ['result'=>-5.1, 'data'=>$data];
-        if(substr($msg,0,3) !== '/id' && !in_array($chatlog,self::$allowfrom)) return ['result'=>-7, 'data'=>$data, 'to'=>$chatlog, 'send'=>self::respond("Not authorized: $chatlog",[],$chatlog)];
-        if(!module_exists(__CLASS__,($method = (str_replace('/','_',array_shift($cmd)))))) return ['result'=>-6, 'data'=>$data];
-        if(is_array($fr=($data['message']['from_reply'] ?? ''))) foreach($fr as $b) foreach($b as $d)
+    public static function callback($data=[]):\route {
+        if(!self::load()) return response()->json(false);
+        if(md5(self::$botapi) !== ($request['hash'] ?? '')) return response()->json(-405);
+        if(is_array($request['callback_query'] ?? ''))
+            if(!empty($cqd=($request['callback_query']['data'] ?? '')))
+                $request['message'] = ['text'=>$cqd, 'from'=>($request['callback_query']['from'] ?? ''), 'chat'=>($request['callback_query']['message']['chat'] ?? ''),
+                                    'from_reply'=>($request['callback_query']['message']['reply_markup']['inline_keyboard'] ?? '')];
+        if(empty($msg = (str_replace('\\','',($request['message']['text'] ?? ($request['msg'] ?? '')))))) return response()->json(['result'=>-1, 'data'=>$request]);
+        if(empty($chatlog = self::$chatlog = ($request['message']['chat']['id'] ?? self::$chatlog))) return response()->json(['result'=>-2, 'data'=>$request]);
+        if(empty($from = ($request['message']['from']['id'] ?? '*'))) return response()->json(['result'=>-3, 'data'=>$request]);
+        if(empty($cmd = preg_split('~(?:\'[^\']*\'|"[^"]*")(*SKIP)(*F)|\h+~', $msg))) return response()->json(['result'=>-4, 'data'=>$request]);
+        if(empty($cmd[0] ?? '')) return response()->json(['result'=>-5, 'data'=>$request]);
+        if(empty($cmd[0] = (explode('@',($cmd[0]."@"))[0] ?? ''))) return response()->json(['result'=>-5.1, 'data'=>$request]);
+        if(substr($msg,0,3) !== '/id' && !in_array($chatlog,self::$allowfrom)) return response()->json(['result'=>-7, 'data'=>$request, 'to'=>$chatlog, 'send'=>self::respond("Not authorized: $chatlog",[],$chatlog)]);
+        if(!module_exists(__CLASS__,($method = (str_replace('/','_',array_shift($cmd)))))) return response()->json(['result'=>-6, 'data'=>$request]);
+        if(is_array($fr=($request['message']['from_reply'] ?? ''))) foreach($fr as $b) foreach($b as $d)
             if(!empty($m=($b['callback_data'] ?? ($d['callback_data'] ?? ''))))
-                if($m == $msg && self::respond('<code>'.($data['message']['from']['first_name'] ?? $from).'</code> selecionou: '.($b['text'] ?? ($d['text'] ?? ''))." <code>$msg</code>",[],$chatlog)) break 2;
-        return self::$method([
+                if($m == $msg && self::respond('<code>'.($request['message']['from']['first_name'] ?? $from).'</code> selecionou: '.($b['text'] ?? ($d['text'] ?? ''))." <code>$msg</code>",[],$chatlog)) break 2;
+        return response()->json(self::$method([
             'chatid' => $chatlog,
             'from' => $from,
             'msg' => $msg,
-            'callback' => ($data['message'] ?? [])
-        ], $cmd);
+            'callback' => ($request['message'] ?? [])
+        ], $cmd));
     }
 
     public static function respond($data=[], $attach=null, $chatlog=null) {

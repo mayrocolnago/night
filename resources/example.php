@@ -4,10 +4,6 @@
 
 class example {
     use \crud; //This will use CRUD methods
-    use \openapi; //This will allow API access for this class
-
-    //This are the APIs we will allow to be accessed (including CRUD ones)
-    public static $openapiOnly = ['index','create','list','read','update','delete'];
 
     //Name of the table we will be using
     public static $crudTable = 'todo';
@@ -35,7 +31,7 @@ class example {
     }
 
     //This is the main function that will be called when the module is loaded
-    public static function index($data=[]) {
+    public static function index($data=[]):\route { // "route" type will make this function an accessable endpoint
         exit(str_replace('<title></title>','<title>TO DO - Example</title>',\assets::show(__CLASS__))); //This will call all assets to be loaded for this module
     }
 

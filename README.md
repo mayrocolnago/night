@@ -24,10 +24,8 @@ NIGHT is a lightweight, flexible PHP framework designed for rapid application de
 
 ### Tech stack ready-to-go
 
-- Docker
-- PHP 7.4 or higher
+- Docker/PHP 7.4 or higher with mod_rewrite enabled
 - MySQL/MariaDB database
-- Apache web server with mod_rewrite enabled
 
 ### Installation
 
@@ -82,17 +80,16 @@ Create a new PHP file `test.php` in the `resources` directory:
 
 ```php
 class test {
-    use \openapi;
 
-    public static function index($data=[]) {
+    public static function index($data=[]):\route { // This ":\route" instruction will make this method an accessable endpoint through URL
         ?><div>
             Hello World
         </div><?php
         // It will print out a page with "Hello World" on a div
     }
 
-    public static function api($data=[]) {
-        return ["message" => "Hello", "from" => "test", "params" => $data];
+    public static function api($data=[]):\route {
+        return response()->json(["message" => "Hello", "from" => "test", "params" => $data]); // When returning JSON "response()->json()" is necessary
         // This will return a JSON response like:
         // {"result":3,"data":{"message":"Hello","from":"test","params":{"param":"value"}}}
         // (3 as of the amount of information on `data`. Useful to count results of a database query dump)
@@ -112,27 +109,26 @@ NIGHT makes it easy to create APIs using the `openapi` trait:
 
 ```php
 class api {
-    use \openapi;
 
-    public static function string($data=[]) { 
-        return 'Hello World'; // Returns {"result":"Hello World"}
+    public static function string($data=[]):\route { 
+        return response()->json('Hello World'); // Returns {"result":"Hello World"}
     }
 
-    public static function number($data=[]) { 
-        return 42; // Returns {"result":42}
+    public static function number($data=[]):\route { 
+        return response()->json(42); // Returns {"result":42}
     }
 
-    public static function array($data=[]) { 
-        return ["name" => "John", "age" => 30]; // Returns {"result":2,"data":{"name":"John","age":30}}
+    public static function array($data=[]):\route { 
+        return response()->json(["name" => "John", "age" => 30]); // Returns {"result":2,"data":{"name":"John","age":30}}
     }
 
-    public static function test($data=[]) { 
-        return ["result" => 2, "something" => 3]; // Returns {"result":2,"something":3} on result level 
+    public static function test($data=[]):\route { 
+        return response()->json(["result" => 2, "something" => 3]); // Returns {"result":2,"something":3} on result level 
         //(because there is "result" key on the array)
     }
 
-    public static function params($data=[]) { 
-        return $data; // Returns all parameters passed in the request {"result":1,"data":[...data]}
+    public static function params($data=[]):\route { 
+        return response()->json($data); // Returns all parameters passed in the request {"result":1,"data":[...data]}
     }
 }
 ```
@@ -211,10 +207,10 @@ $fields = pdo_create("users",[
 ]); // returns an array with the fields keys ['id','name','email']
 
 // Execute a query
-$result = pdo_query("SELECT * FROM users WHERE id = ?", [1]);
+$update = pdo_query("UPDATE users SET name='Josh' WHERE id=:id", ['id'=>1]);
 
 // Fetch results
-$users = pdo_fetch_array("SELECT * FROM users");
+$result = pdo_query("SELECT * FROM users WHERE id=:id", ['id'=>1]);
 
 // Insert data
 $id = pdo_insert("users", ["name" => "John", "email" => "john@example.com"]); //returns last insert id
@@ -236,6 +232,8 @@ $another->pdo_query("SELECT * FROM database2.users");
 // Default will still continue working
 ```
 
+> Keep in mind that successful connections to non existent databases will create them automatically.
+
 ### CRUD Operations
 
 The `crud` trait provides a simple way to implement CRUD operations:
@@ -243,14 +241,18 @@ The `crud` trait provides a simple way to implement CRUD operations:
 ```php
 class cart {
     use \crud;
-    use \openapi;
     
     public static $crudTable = "cart";
 
     // Method `create` will be available because of `crud` trait
     // Along with all others from `crud` trait
 
-    // To limit the available APIs, set: `public static $openapiOnly = ['create','read'];`
+    // To limit the availability of APIs access, consider using the permisson handling method.
+    // This will be trigger automatically before every CRUD action for this module
+    public static function crudPermissionHandler($data=[], $action, $table){
+        if($action === 'delete') return false; //This will prevent from deleting
+        return true; //Otherwise, allow it
+    }
     
     public static function js($data=[]) {
         ?><script>
@@ -279,26 +281,28 @@ class cart {
 }
 ```
 
-Another usages:
+Another **CRUD** methods and usages:
 ```php
+//In extension to `cart` example
+
 // Creates a row with columns `name` and `email` filled with `John` and `john@example.com` respectively
-$userId = \module::create(["name" => "John", "email" => "john@example.com"]);
+$userId = \cart::create(["name" => "John", "email" => "john@example.com"]);
 // Returns {"result":1, ...} meaning how much rows were inserted
 
 // Gets a row where `name` is `John`
-$users = \module::read([":name" => "John"]);
+$users = \cart::read([":name" => "John"]);
 // Returns {"result":1,"data":{"id":1,"name":"John","email":"john@example.com"}, ...}
 
 // Gets a set of rows where `name` is `John`
-$users = \module::list([":name" => "John%"]);
+$users = \cart::list([":name" => "John%"]);
 // Returns {"result":2,"data":[{"id":1,"name":"John Doe","email":"john@example.com"},{"id":2,"name":"John Cena","email":"cena@example.com"}], ...}
 
 // Updates `name` to `John Doe` where `id` is `1`
-\module::update([":id" => 1, "name" => "John Doe"]);
+\cart::update([":id" => 1, "name" => "John Doe"]);
 // Returns {"result":1, ...} meaning how much rows were affected
 
 // Delete something
-\module::delete([":id" => 1]);
+\cart::delete([":id" => 1]); //If allowed
 // Returns {"result":1, ...} meaning how much rows were deleted
 ```
 
@@ -312,11 +316,8 @@ File: `/resources/app.php`
 
 ```php
 class app {
-    use \openapi;
 
-    public static $openapiOnly = ['index']; /* opcional */
-
-    public static function index($data=[]) {
+    public static function index($data=[]):\route {
         // This will load all CSS, HTML, and JS from the "app" namespace.
         exit(\assets::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
     }
@@ -534,9 +535,11 @@ NIGHT includes a set of useful variables on the environment:
 
 ## Utility Functions
 
-NIGHT includes a wide range of utility functions in the `globals` class:
+NIGHT includes a wide range of utility functions in the `globals` class, along with other modules on `base` folder.
 
-### HTTP Requests
+Some of this functions are:
+
+### HTTP Requests (both available in PHP and JS)
 
 ```php
 // Send a POST request
@@ -548,12 +551,15 @@ $response = curlsend(
 );
 ```
 
-### Date and Time
+### Tab switching for JS
+
+```js
+switchtab('#my_screen',{'value':1});
+```
+
+### Date and Time Manipulation
 
 ```php
-// Format a date
-$formattedDate = datetostrtotime('01/12/2023'); //2023-12-01
-
 // Calculate remaining time
 $timeString = remainingstr(strtotime('tomorrow'), strtotime('now')); //1 day
 ```
@@ -566,17 +572,12 @@ $cleanString = rmA('áéíóú'); //aeiou
 
 // Mask middle of string
 $maskedString = str_maskmiddle('1234567890'); //123****890
-
-// Format CPF/CNPJ
-$formattedDoc = formatar_cpf_cnpj('12345678901'); // 123.456.789-01
 ```
 
-### Validation
+And so many others.
 
-```php
-// Validate CPF/CNPJ for Brazilian documents
-$isValid = valida_cpf_cnpj('12345678901'); // true or false
-```
+Follow the [GLOBALS.md](GLOBALS.md) file for more details.
+
 
 ## Project Configuration
 
@@ -610,7 +611,7 @@ Other possible names for the configuration files are:
 
 > **Note:** The framework is gonna search for the configuration file up to 5 levels up in the directory tree.
 
-## Runtime Configuration
+## Runtime Configuration (also provided by `globals`)
 
 You can also set and get configuration values at runtime:
 

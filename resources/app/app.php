@@ -1,10 +1,7 @@
 <?php
 class app extends \tabler {
-    use \openapi;
 
-    public static $openapiOnly = ['index'];
-
-    public static function index($data=[]) {
+    public static function index($data=[]):\route {
         //url /app will show all the css(), html() and js() functions from this folder
         exit(str_replace('<title></title>','<title>Project</title>',parent::index(__CLASS__))); //__CLASS__ being /app folder (see \assets for more details)
     }

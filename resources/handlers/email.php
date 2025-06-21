@@ -4,39 +4,43 @@ class email {
     
     private static $loaded = false; //default false always
     
-    private static $credentials = [
+    private static $credentials = [[
         'host' => 'smtp.gmail.com', // default smtp server
         'port' => '587', // default smtp port 
         'name' => null, // default sender name on email
-        'sender' => null, // default sender email used on auth
+        'from' => null, // default sender email same as sender
+        'sender' => null, // default sender email same as from
+        'user' => null, // can be the same configuration of sender
         'password' => null, // defaul email password auth
         'encryption' => 'tls' // default encryption type
-    ];
+    ]];
 
     public static function database() {
-        pdo_query("CREATE TABLE IF NOT EXISTS `email_queue` (
-            `id` int NOT NULL AUTO_INCREMENT,
-            `email` varchar(200),
-            `subject` varchar(200) DEFAULT 'Novo email',
-            `body` longtext NULL DEFAULT NULL,
-            `headers` longtext NULL DEFAULT NULL,
-            `response` longtext NULL DEFAULT NULL,
-            `sendat` int DEFAULT '0',
-            PRIMARY KEY (`id`))");
+        return pdo_create("email_queue",[
+            "id" => "int NOT NULL AUTO_INCREMENT",
+            "email" => "varchar(200)",
+            "subject" => "varchar(200) DEFAULT 'Novo email'",
+            "body" => "longtext NULL DEFAULT NULL",
+            "headers" => "longtext NULL DEFAULT NULL",
+            "response" => "longtext NULL DEFAULT NULL",
+            "sendat" => "int DEFAULT '0'"
+        ]);
     }
     
     protected static function load() {
         if(self::$loaded) return true;
-        foreach(self::$credentials as $k => &$v)
-            if(empty($v = ($_SERVER["email_$k"] ?? $v))) return false;
+        if(is_array($sp = ($_SERVER["email"] ?? ($_SERVER["email_providers"] ?? '')))) self::$credentials = $sp;
+        else foreach(self::$credentials[0] as $k => &$v)
+                if(empty($v = ($_SERVER["email_$k"] ?? $v)))
+                    if($k === 'password') return false;
         return (self::$loaded = true);
     }
 
     public function __construct() { return self::load(); }
 
     public static function send($email='',$subject='',$body='',$sendat=null,$headers=[],$queueonly=false) {
-        if($_SERVER['DEVELOPMENT'] ?? false) $queueonly = true;
-        if(!empty($sendat) && !$queueonly) $queueonly = true;
+        if(($_SERVER['DEVELOPMENT'] ?? false) && is_bool($queueonly)) $queueonly = true;
+        if(!empty($sendat) && ($queueonly === false)) $queueonly = true;
         if(!is_string($subject)) return -1;
         if(!is_string($body)) return -1;
         if(empty($sendat) || !is_numeric($sendat)) $sendat = strtotime('now');
@@ -49,7 +53,7 @@ class email {
                         $body = str_replace('</code>','</p>',$body);
         if(!empty(pdo_fetch_row("SELECT id FROM email_queue WHERE email='$email' AND sendat > ".strtotime('-1 minute')." AND sendat < ".strtotime('+1 minute')))) return 1.1;
         $result = pdo_insert('email_queue',['email'=>$email, 'subject'=>$subject, 'body'=>$body, 'sendat'=>$sendat, 'headers'=>$headers]);
-        if(!$result && $queueonly !== 'database') return self::database(self::send($email,$subject,$body,$sendat,$headers,'database'));
+        if(!$result && !is_array($queueonly)) return self::send($email,$subject,$body,$sendat,$headers,self::database());
         if(!$queueonly) self::async(function(){ \email::process_queue(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
@@ -89,29 +93,98 @@ class email {
     protected static function api($to,$subject,$msg,$extra=[]) {
         //load module
         if(!self::load()) return false;
+        //validate parameters
+        $retry = 0;
+        $success = false;
+        $responses = [];
+        $credentials = ((is_array(self::$credentials[0] ?? '')) ? self::$credentials : [self::$credentials]);
+        //iterate through credentials
+        foreach($credentials as $credential)
+            if(!empty($method = ((($credential['user'] ?? '') === 'apikey') ? 'sendgrid' : 'smtp'))) {
+                $res=call_user_func_array("self::$method",[$to,$subject,$msg,$extra,$credential]);
+                $responses[] = $res; $retry++;
+                if($success = ($res['result'] ?? false)) break; }
+        return [
+            'result' => (($success) ? $retry : 'all methods failed'),
+            'credentials' => ((empty($responses)) ? str_maskmiddle_array($credentials) : null),
+            'responses' => $responses
+        ];
+    }
+
+    protected static function sendgrid($to,$subject,$msg,$extra=[],$credentials=null) {
+        //load module
+        if(!self::load()) return false;
+        //validate parameters
+        $from = ($extra['from'] ?? ($credentials['from'] ?? ($credentials['sender'] ?? ($credentials['user'] ?? ''))));
+        $api_key = ($extra['pass'] ?? ($extra['apikey'] ?? ($credentials['password'] ?? ($credentials['passw'] ?? ($credentials['pass'] ?? ($credentials['apikey'] ?? ''))))));
+        //sendgrid curl
+        @ob_start();
+        $url = 'https://api.sendgrid.com/v3/mail/send';
+        $data = [
+            'personalizations' => [
+                [ 'to' => [ ['email' => $to] ] ]
+            ],
+            'from' => [ 'email' => $from ],
+            'subject' => html_entity_decode($subject),
+            'content' => [
+                [ 'type' => 'text/plain', 'value' => html_entity_decode(strip_tags($msg)) ],
+                [ 'type' => 'text/html', 'value' => $msg ]
+            ] ];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $api_key,
+                'Content-Type: application/json'
+            ],
+            CURLOPT_POSTFIELDS => json_encode($data)
+        ]);
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if(curl_error($ch))
+            echo 'Erro cURL: ' . curl_error($ch);
+        else
+            echo 'Status HTTP: ' . $http_code . PHP_EOL .
+                 'Response: ' . $response . PHP_EOL;
+        curl_close($ch);
+        $_SERVER['email_response'] = str_replace(["'",'"'],'::',@ob_get_contents());
+        @ob_end_clean();
+        //return result
+        return [
+            'result' => (intval($http_code ?? 0) === 202),
+            'credentials' => str_maskmiddle_array($credentials),
+            'response' => emojientities($_SERVER['email_response'] ?? '')
+        ];
+    }
+
+    protected static function smtp($to,$subject,$msg,$extra=[],$credentials=null) {
+        //load module
+        if(!self::load()) return false;
+        //validate parameters
+        $email = ($extra['from'] ?? ($credentials['from'] ?? ($credentials['sender'] ?? ($credentials['user'] ?? ''))));
+        $user = ($extra['user'] ?? ($credentials['user'] ?? ($credentials['sender'] ?? ($credentials['from'] ?? ''))));
+        $pass = ($extra['pass'] ?? ($credentials['password'] ?? ($credentials['passw'] ?? ($credentials['pass'] ?? ''))));
+        $nome = ($extra['nome'] ?? ($extra['name'] ?? ($credentials['name'] ?? '')));
         //start sending and loggin
         @ob_start();
         $_SERVER['email_response'] = '';
         $mail = new PHPMailer(false); try { //true for exceptions
-            //validade parameters
-            $email = ($extra['from'] ?? (self::$credentials['sender'] ?? ''));
-            $user = ($extra['user'] ?? (self::$credentials['sender'] ?? ''));
-            $pass = ($extra['pass'] ?? (self::$credentials['password'] ?? ''));
-            $nome = ($extra['nome'] ?? ($extra['name'] ?? (self::$credentials['name'] ?? '')));
-            //validade mail from the name
+            //validate parameters
             if((!(strpos($email,'@') !== false)) && strpos($nome,'@') !== false) 
                 if(!empty($email = $nome) && is_array($nome = explode('@',$nome)))
                     $nome = strtoupper(explode('.',$nome[1].'.')[0]);
             //Server settings
             $mail->SMTPDebug = 2; // Enable verbose debug output
             $mail->isSMTP(); // Set mailer to use SMTP
-            $mail->Host = ($extra['host'] ?? (self::$credentials['host'] ?? '')); // Specify main and backup SMTP servers
-            $mail->Port = ($extra['port'] ?? (self::$credentials['port'] ?? 587));  // TCP port to connect to
+            $mail->Host = ($extra['host'] ?? ($credentials['host'] ?? '')); // Specify main and backup SMTP servers
+            $mail->Port = ($extra['port'] ?? ($credentials['port'] ?? 587));  // TCP port to connect to
             $mail->SMTPAuth = true; // Enable SMTP authentication
             $mail->Username = $user; // SMTP username
             $mail->Password = $pass; // SMTP password
             //encryption configuration
-            if(in_array(($enclayer=preg_replace('/[^a-z]/','',(strtolower($extra['secure'] ?? ($extra['encryption'] ?? (self::$credentials['encryption'] ?? 'tls')))))),
+            if(in_array(($enclayer=preg_replace('/[^a-z]/','',(strtolower($extra['secure'] ?? ($extra['encryption'] ?? ($credentials['encryption'] ?? 'tls')))))),
             ['tls', 'ssl'])) $mail->SMTPSecure = $enclayer; // Enable TLS encryption, `ssl` also accepted
             else $mail->SMTPSecure = 'tls'; //default to tls
             //Recipients
@@ -149,19 +222,17 @@ class email {
             $sent = false; }
         //Log generator
         $_SERVER['email_response'] = str_replace(["'",'"'],'::',@ob_get_contents());
+        if(strpos(strtoupper($_SERVER['email_response']),'SMTP ERROR') !== false)
+            if(strpos(strtolower($_SERVER['email_response']),'failed') !== false) $sent = false;
         @ob_end_clean();
-        $maskedcreds = [];
-        foreach(self::$credentials as $k => $v)
-            $maskedcreds[$k] = str_maskmiddle($v);
         //return result
         return [
             'result' => $sent, 
-            'credentials' => $maskedcreds,
+            'credentials' => str_maskmiddle_array($credentials),
             'response' => emojientities($_SERVER['email_response'] ?? '')
         ];
     }
 }
-// IMPLEMENTATION OF PHPMAILER TO SEND EMAIL (FROM LINE 190)
  
 //  * PHPMailer RFC821 SMTP email transport class.
 //  * PHP Version 5.5.
@@ -188,7 +259,7 @@ class email {
 //  * @author  Chris Ryan
 //  * @author  Marcus Bointon <phpmailer@synchromedia.co.uk>
 //  *
-  
+
 class SMTP {
     const VERSION = '6.0.5';
     const LE = "\r\n";
