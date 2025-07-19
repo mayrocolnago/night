@@ -55,14 +55,14 @@ trait crud {
         if(is_array($data))
             foreach($data as $k => $v)
                 if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|]/','',str_replace('-','.',$k))))))
-                    if(!(strpos($k,'.') !== false)) $where[$k] = $v;
+                    if(!(strpos($k,'.') !== false)) $where["`$k`"] = $v;
                     else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                             if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
                                 $where["json_value($primary,'\$.$subset')"] = self::convchars($value);
         //returns
         $result = (pdo_fetch_array("SELECT * FROM $table ".((empty($where))?"":"WHERE ".
             preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace('|','',$a)."` LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace('|','',$a)." LIKE ?");
             }, array_keys($where)))))." ORDER BY $order".((!empty($limit)) ? " LIMIT $limit" : ""), array_values($where)) ?? []);
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler') && empty($from)) self::crudCompletionHandler($data, ($from ?? __FUNCTION__), $table, $result);

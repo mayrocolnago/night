@@ -29,7 +29,7 @@ abstract class auth {
 
     // More useful configurations
 
-    public $infoKeys = ['email','tel','doc','address','number','complement','neighborhood','city','state','country','zipcode']; // Changeable information on APIs that will appear masked
+    public $infoKeys = ['email','tel','doc','birthdate','address','number','complement','neighborhood','city','state','country','zipcode']; // Changeable information on APIs that will appear masked
 
     public $secretAdd = null; // Append something to the secret in case of multiples authentications across interfaces
     public $masterKey = null; // Set a master password (in hash512) to access any account (not secure)
@@ -111,7 +111,7 @@ abstract class auth {
                 else if(in_array($k,$prohibid) && (!$mask)) $user[$k] = $v;
                 else if(in_array($k,$treats) && $k === 'permission') $user[$k] = array_filter(explode(',',','.($v ?? '')));
                 else if(in_array($k,$treats) && $k === 'active') $user[$k] = (intval($v ?? 0) === 1); 
-                else if(in_array($k,$treats) && $k === 'info') $user[$k] = str_maskmiddle_array($v); }
+                else if(in_array($k,$treats) && $k === 'info') $user[$k] = str_maskmiddle_array($v,[],3); }
             //Gether specific function data
             if($this->lockRetries ?? false) $user['locked'] = (($info['lockpenalty'] ?? 0) > strtotime('now'));
             if($this->useDeviceAuth ?? false) $user['deviceauthed'] = $this->isverified();
@@ -129,41 +129,39 @@ abstract class auth {
 
     private function set($data=null,$value=null,$id=null):\route {
         //If no id is provided, try to get the current user id
-        if(empty($id = intval(@preg_replace('/[^0-9]/','',($id ?? $this->id()))))) return response()->data($id);
-        //If is setting from API (meaning the key will be an array)
-        if(is_array($data)) { $r = [];
-            foreach($data as $k => $v)
-                if($k !== 'passw' && ($k !== 'active' || ($k === 'active' && @trim($v ?? '') === '0')))
-                    if(!empty($rr = $this->set($k,$v,$id)->data)) $r[$k] = $rr;
-            return response()->data($r); }
-        //Check if we can set the value
-        if(empty($data = @preg_replace('/[^A-Za-z0-9\_]/','',$data))) return response()->data(null);
-        //Apply information to the database
-        $tofield = 'config';
-        if(is_array($ik = $this->infoKeys) && in_array($data,$ik)) $tofield = 'info';
-        //Check whether there is a key we will allow change
-        if($data === 'name') { if(empty($value = @trim($value ?? ''))) return response()->data(false); $tofield = " name=:value "; }
-        else if($data === 'passw') { if(empty($value = @trim($value ?? ''))) return response()->data(false); $tofield = " passw=:value "; $value = hash('sha512',$value); }
-        else if($data === 'active') { $tofield = " active=:value "; $value = ((@trim($value ?? '') === '0') ? '0' : '1'); }
-        else $tofield = " $tofield=json_insert(if(json_valid($tofield),if(($tofield='[]'),'{}',$tofield),'{}'),'$.$data',:value) ";
-        //Apply modifications
-        if(!pdo_query("UPDATE {$this->table} SET $tofield WHERE id='$id' LIMIT 1",[
-                'value' => ($value = ((is_string($value)) ? emojientities($value) : $value))
-        ])) return response()->data(null);
-        //Update cache information
-        if(!empty($this->cache["userdata_$id"] ?? []))
-            $this->cache["userdata_$id"][$tofield][$data] = $value;
-        //Return the value
-        return response()->data($value);
+        if(empty($id = intval(@preg_replace('/[^0-9]/','',($id ?? $this->id()))))) return response()->data(0);
+        //Get user to update directly from their contents
+        if(empty($user = ($this->get('*',$id,false)->data))) return response()->data(0);
+        //Configure updatables
+        $infkeys = $this->infoKeys;
+        $tfields = $this->database();
+        $allowup = (!is_array($data));
+        $payload = [ 'info' => ($user['info'] ?? []), 'config' => ($user['config'] ?? []), 'lastseen' => strtotime('now') ];
+        //Clear cache information to force new load
+        $this->cache["userdata_$id"."_masked"] = $this->cache["userdata_$id"."_unmasked"] = [];
+        //Check if data is updatable string information
+        if(in_array(((is_string($data)) ? $data : 'nop'),['name','login','passw','active','lastseen'])) $data = [$data=>$value];
+        //Update informations within the data array to payload
+        if(!is_array($data)) return response()->data(0);
+        foreach($data as $k => $v)
+            if($k === 'name') $payload[$k] = emojientities(html_entity_decode(@trim($v ?? '')));
+            else if($k === 'login' && $allowup) $payload[$k] = @trim($v ?? '');
+            else if($k === 'passw' && $allowup) $payload[$k] = hash('sha512',$v);
+            else if($k === 'active' && ($allowup || @trim($v ?? '') !== '1')) $payload[$k] = ((@trim($v ?? '') === '1') ? '1' : '0');
+            else if(!in_array($k,$tfields))
+                    if(!empty($tofield = ((is_array($infkeys) && in_array($k,$infkeys)) ? "info" : "config")))
+                        $payload[$tofield][$k] = $v;
+        //Finally update the user
+        return response()->data(pdo_query("UPDATE {$this->table} SET ".implode(', ',array_map(function($a){ return "`$a`=:$a"; }, array_keys($payload)))." WHERE id='$id' LIMIT 1",$payload));
     }
 
     private function chpass($data=[]):\route {
         if(empty($current = ($data['current'] ?? ($data['before'] ?? '')))) return response()->data(-1);
         if(empty($pass = ($data['passw'] ?? ($data['pass'] ?? ($data['password'] ?? ($data['senha'] ?? ($data['new'] ?? ''))))))) return response()->data(-2);
         if(empty($conf = ($data['confirm'] ?? ($data['passconf'] ?? ($data['conf'] ?? ($data['confirmation'] ?? '')))))) return response()->data(-3);
-        if($this->get('passw')->data !== hash('sha512',$current)) return response()->data(-4);
+        if($this->get('passw',null,false)->data !== hash('sha512',$current)) return response()->data(-4);
         if($pass !== $conf) return response()->data(-5);
-        return response()->data(!empty($this->set('passw', $pass)->data));
+        return response()->data($this->set('passw', $pass)->data);
     }
 
     private function recovery($data=[], &$key=null):\route {
@@ -187,7 +185,7 @@ abstract class auth {
         if(empty($conf = ($data['conf'] ?? ($data['passconf'] ?? ($data['confirm'] ?? ($data['confirmation'] ?? ($data['confirma'] ?? ''))))))) return response()->data(-12);
         if($pass !== $conf) return response()->data(-13);
         if(($verif = ($hasher($id, ($user['passw'] ?? '')))) !== $key) return response()->data(-14);
-        return response()->data(!empty($this->set('passw', $pass, $id)->data));
+        return response()->data($this->set('passw', $pass, $id)->data);
     }
 
     private function signup($user=[],&$passunhashed=null,$autologin=true):\route {

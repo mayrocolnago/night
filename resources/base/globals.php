@@ -265,7 +265,8 @@ class globals {
   }
 
   /* mask a portion of the middle of a string */
-  public static function str_maskmiddle($input='') {
+  public static function str_maskmiddle($input='',$above=0) {
+    if(strlen($input = @strval($input)) <= $above) return $input;
     if(strpos($input,'*') !== false) return $input;
     preg_match_all('/[0-9a-zA-Z]/', $input, $matches, PREG_OFFSET_CAPTURE);
     $totalAlnumChars = count($matches[0]);
@@ -281,11 +282,11 @@ class globals {
   }
 
   /* mask a portion of the middle of a string with str_maskmiddle recursively on an array */
-  public static function str_maskmiddle_array($array=[],$onlykeys=[]) {
+  public static function str_maskmiddle_array($array=[],$onlykeys=[],$above=0) {
     if(is_array($array))
       foreach($array as $k => &$v)
-        if(is_array($v)) $v = str_maskmiddle_array($v,$onlykeys);
-        else if(is_string($v) && (empty($onlykeys) || in_array($k,$onlykeys))) $v = str_maskmiddle($v);
+        if(is_array($v)) $v = str_maskmiddle_array($v,$onlykeys,$above);
+        else if(is_string($v) && (empty($onlykeys) || in_array($k,$onlykeys))) $v = str_maskmiddle($v,$above);
     return $array;
   }
 
@@ -602,6 +603,7 @@ class globals {
         .horizontalscroll::-webkit-scrollbar { width: 10px;}
         .horizontalscroll::-webkit-scrollbar-track { border-radius: 10px;}
         .horizontalscroll::-webkit-scrollbar-thumb { background: #999; border-radius: 10px; border:4px solid var(--background); }
+        .horizontalscroll > * { display:inline-block !important; }
 
         [data-animate] { filter:opacity(0); transition: .4s; }
         [data-animate="up"] { transform: translate3d(0, +70px, 0); }
@@ -682,12 +684,12 @@ class globals {
 
       var serveraddress = (serveraddress || '/');
 
-      /* app on load */
-      $(window).on('onload',function(state){
-
-          if($('.autouploadtosrc').length)
-            if(function_exists('bindupload')){ 
-              $('.autouploadtosrc').each(function(index,elem){ 
+      var globals = {
+        'load':function(){
+          if($('.autouploadtosrc:not(.gluk)').length)
+            if(function_exists('bindupload'))
+              $('.autouploadtosrc:not(.gluk)').each(function(index,elem){
+                $(elem).addClass('gluk');
                 var ide = $(elem).attr('id');
                 var ideuper = '#'+ide+'_uploader';
                 if($(elem).attr('type') === 'file') ideuper = '#'+ide;
@@ -728,26 +730,26 @@ class globals {
                       function(error){ $(elem).attr('src','error'); },
                       function(always){ $(elem).removeClass('loadblink'); });
                 }); });
-            }
 
-          $('*[nextfield]').on("keyup",function(e){ 
+          $('*[nextfield]:not(.glnk)').addClass('glnk').on("keyup",function(e){ 
               if(e.which !== 13) return;
               var este = $(this).attr('nextfield');
               try { if(este === 'blur') $(document.activeElement).blur(); } catch(err) { }
               var next = $(este);
-              var type = ((next.prop('tagName') === 'button'
+              var type = ((String(next.prop('tagName')).toLowerCase() === 'button'
+                      ||((next.hasClass('btn') || (next.hasClass('btns')))
                       ||((next.attr('type') === 'submit'
                       ||((next.attr('type') === 'button'
-                      ||((next.attr('type') === 'clickable'))))))) ? 'click' :
-                          ((next.prop('tagName') === 'div'
-                          ||((next.prop('tagName') === 'form'
+                      ||((next.attr('type') === 'clickable')))))))) ? 'click' :
+                          ((String(next.prop('tagName')).toLowerCase() === 'div'
+                          ||((String(next.prop('tagName')).toLowerCase() === 'form'
                           ||((next.hasClass('screen')))))) ? 'blur' : 'focus'));
               try { if(type === 'blur') $(document.activeElement).blur();
               else if(type === 'click') next.click();
               else next.focus(); } catch(err) { }
           });
 
-          $('.btns, .btns2, .autolockbtn').on('click',function(){
+          $('.btns, .btns2, .autolockbtn:not(.glbk)').addClass('glbk').on('click',function(){
               if(!($(this).hasClass('keepunlocked'))) {
                 if($(this).hasClass('disabled')) return false; 
                 else $(this).addClass('disabled unlockscheduled'); 
@@ -755,18 +757,20 @@ class globals {
                   $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled'); 
                 },12345); }
           });
+
+          try { $('.datamask:not(.glmk)').addClass('glmk').attr('type','tel').mask('99/99/9999'); } catch(err) { }
           
-          try { $('.datamask').attr('type','tel').mask('99/99/9999'); } catch(err) { }
-          
-          try { $('.cepmask').attr('type','tel').mask('99999-999'); } catch(err) { }
+          try { $('.cepmask:not(.glmk)').addClass('glmk').attr('type','tel').mask('99999-999'); } catch(err) { }
 
-          try { $('.telmask').attr('type','tel').mask('(99) 99999-9999'); } catch(err) { }
+          try { $('.telmask:not(.glmk)').addClass('glmk').attr('type','tel').mask('(99) 99999-9999'); } catch(err) { }
 
-          try { $('.cpfmask').attr('type','tel').mask("000.000.000-00"); } catch(err) { }
+          try { $('.cpfmask:not(.glmk)').addClass('glmk').attr('type','tel').mask("000.000.000-00"); } catch(err) { }
 
-          try { $('.cnpjmask').attr('type','tel').mask("00.000.000/0000-00"); } catch(err) { }
+          try { $('.cnpjmask:not(.glmk)').addClass('glmk').attr('type','tel').mask("00.000.000/0000-00"); } catch(err) { }
 
-          try { $('.emailmask').attr('type','email').keydown(function(event){
+          try { $('.moneymask:not(.glmk)').addClass('glmk').attr('type','tel').on('keypress',function(){ $(this).val(number_format(floatval_safe($(this).val()),2,',','.')); }).mask('#.##0,00', {reverse: true}); } catch(err) { }
+
+          try { $('.emailmask:not(.glmk)').addClass('glmk').attr('type','email').keydown(function(event){
               if(String(event.key).length > 1) return;
               if(event.key == ' ') return false;
               let org = $(this).val();
@@ -788,7 +792,7 @@ class globals {
               $(this).val(String($(this).val()).toLowerCase().replace(/[^0-9a-z\@\.\_\+\-\%]/gi,''));
           }); } catch(err) { }
 
-          try { $('.docmask').attr('type','tel').mask("000.000.000-00")
+          try { $('.docmask:not(.glmk)').addClass('glmk').attr('type','tel').mask("000.000.000-00")
                       .keyup(function(event) { try {
                           if(typeof event.which !== 'undefined')
                               if(((event.which >= 48) && (event.which <= 57)) || ((event.which >= 96) && (event.which <= 105)) || (event.which == 8) || (event.which == 229))
@@ -801,7 +805,7 @@ class globals {
                                       if(!((event.which == 8) && ($(this).val().length == 14)))
                                           $(this).mask("00.000.000/0000-00", { reverse: true }); } catch(e) { } }); } catch(err) { }
 
-          try { $('.cursorgrab').mousedown(function(e){
+          try { $('.cursorgrab:not(.glck)').addClass('glck').mousedown(function(e){
                 cursordown = true; cursorxpos = $(this).scrollLeft() + e.clientX; cursorypos = $(this).scrollTop() + e.clientY;
               }).mousemove(function(e){
                 if(!cursordown) return;
@@ -810,7 +814,12 @@ class globals {
               }).mouseup(end = function(e){
                 cursordown = false;
               }).mouseleave(end); } catch(err) { }
+        }
+      };
 
+      /* app on load */
+      $(window).on('onload',function(state){
+          globals.load();
           curlsend_default_params['token'] = function(){ let token = ''; token = ((empty(token = getitem('token'))) ? $_cookie('token') : token); };
           curlsend_default_params['deviceauth'] = function(){ let dauth = ''; dauth = ((empty(dauth = getitem('deviceauth'))) ? $_cookie('deviceauth') : dauth); };
       });
@@ -1073,10 +1082,10 @@ class globals {
         reqtype = reqtype || 'application/x-www-form-urlencoded';
         cachectl = cachectl || false;
         cors = cors || false;
-        if(typeof params !== 'object') params = {};
+        if(empty(params)) params = {};
         if(cachectl === true) params.t = (new Date().getTime());
         Object.keys(curlsend_default_params).forEach(function(key) {
-            if(key in params) return; try {
+            try { if(key in params) return;
               if(typeof curlsend_default_params[key] === 'function')
                    params[key] = curlsend_default_params[key]();
               else params[key] = curlsend_default_params[key];
@@ -1092,7 +1101,7 @@ class globals {
         };
         eventfire(e+'_onpoststart', params);
         if(typeof cachectl !== 'boolean' || cachectl === 'store' || cachectl === 'cache') {
-          var curl_cache_storage = 'curl_cache_storage';
+          var curl_cache_storage = '@curl_cache_storage';
           var cachecode = String(url).replace(/[^a-z0-9]/gi,'').substr(0,50);
               cachecode = cachecode +'_'+ String(JSON.stringify(params)).replace(/[^a-zA-Z0-9]/gi,'').substr(0,50);
           var cachestorage = getitem(curl_cache_storage); if(empty(cachestorage)) cachestorage = {};
@@ -1267,7 +1276,9 @@ class globals {
       }
 
       /* similar function to mask middle strings */
-      function str_maskmiddle(input) {
+      function str_maskmiddle(input,above) {
+        if(typeof above === 'undefined') above = 0;
+        if(String(input).length <= above) return input;
         if(empty(input)) return '*******';
         if(typeof input !== 'string') return '*******';
         if(input.includes('*')) return input;
@@ -1443,7 +1454,9 @@ class globals {
           if(closebutton === false) $('.alertpormodaldivmsg .closebtnnoalertpormodal').hide();
           else $('.alertpormodaldivmsg .closebtnnoalertpormodal').show(); $('.alertpormodaldivmsg #alertpmconteudo').html(text);
           eventfire('alertpormodal',{ 'text':text, 'closebutton':closebutton, 'animate':animate });
-          return ((animate === false) ? $('.alertpormodaldivmsg').show() : $('.alertpormodaldivmsg').slideDown());
+          if(animate === false) $('.alertpormodaldivmsg').show(); else $('.alertpormodaldivmsg').slideDown();
+          $('.alertpormodaldivmsg .glk').removeClass('glk'); globals.load();
+          return $('.alertpormodaldivmsg');
       }
 
       /* format document */
@@ -1459,15 +1472,15 @@ class globals {
         $.getJSON(`https://viacep.com.br/ws/${value}/json/`,function(data) {
           if(!data) return;
           let parent = $(el).closest('form, .content, .heading');
-          $(parent).find('input[id$="logradouro"]').val(data['logradouro']);
-          $(parent).find('input[id$="bairro"]').val(data['bairro']);
-          $(parent).find('input[id$="cidade"]').val(data['localidade']);
-          $(parent).find('input[id$="estado"]').val(data['uf']);
-          try { if(empty(data['estado'])) return $(parent).find('input[id$="uf"]').focus(); } catch(e) { }
-          try { if(empty(data['localidade'])) return $(parent).find('input[id$="cidade"]').focus(); } catch(e) { }
-          try { if(empty(data['bairro'])) return $(parent).find('input[id$="bairro"]').focus(); } catch(e) { }
-          try { if(empty(data['logradouro'])) return $(parent).find('input[id$="logradouro"]').focus(); } catch(e) { }
-          try { return $(parent).find('input[id$="numero"]').focus(); } catch(e) { }
+          $(parent).find('input[id$="logradouro"], input[id$="address"]').val(data['logradouro']);
+          $(parent).find('input[id$="bairro"], input[id$="neighborhood"]').val(data['bairro']);
+          $(parent).find('input[id$="cidade"], input[id$="city"]').val(data['localidade']);
+          $(parent).find('input[id$="estado"], input[id$="state"]').val(data['uf']);
+          try { if(empty(data['estado'])) return $(parent).find('input[id$="uf"], input[id$="state"]').focus(); } catch(e) { }
+          try { if(empty(data['localidade'])) return $(parent).find('input[id$="cidade"], input[id$="city"]').focus(); } catch(e) { }
+          try { if(empty(data['bairro'])) return $(parent).find('input[id$="bairro"], input[id$="neighborhood"]').focus(); } catch(e) { }
+          try { if(empty(data['logradouro'])) return $(parent).find('input[id$="logradouro"], input[id$="address"]').focus(); } catch(e) { }
+          try { return $(parent).find('input[id$="numero"], input[id$="number"]').focus(); } catch(e) { }
         });
       }
     </script><?php 
