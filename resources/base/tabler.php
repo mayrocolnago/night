@@ -60,7 +60,7 @@ class tabler {
         <?php
         \globals::js();
         \desktop::js();
-        \icons::js();
+        \icon::js();
     }
 
 }

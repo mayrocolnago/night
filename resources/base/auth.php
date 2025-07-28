@@ -9,8 +9,20 @@ abstract class auth {
 
     public $CSRFprotection = false; // Enables CSRF protection module
     public $allowAPIaccess = false; // Enables possibility of accessing resources through an API key (this bypasses the CSRF)
-    public $allow2FAsecret = false; // Whether to verify for 2FA secrets on signin for validation
     public $useDeviceAuth = false; // Use device authentication (a protection layer that return "verified" for a second hash)
+
+    public $allow2FAsecret = false; // Whether to verify for 2FA secrets on signin for validation
+    public $drift2FAtime = 1; // Configures the time drift in how much codes are allowed between old and new ones
+    public $issuer2FA = null; // Issuer name for 2FA secrets
+    public $label2FA = null; // Label name for 2FA secrets
+
+    public $enableOTP = false; // Whether to force OTP verification on given situations
+    public $signinOTP = true; // Force OTP verification on trying to login to the user
+    public $signupOTP = true; // Force OTP verification on account creation
+    public $expireOTP = 300; // Expiration time in seconds for OTP codes (default 2FA is 30 seconds) - without drifting
+    public $OTPreference = ["login"]; // Main information key used on OTP verifications (ex. login, email, tel)
+    public $requestOTPinterval = "+1 minute"; // How much an user need to wait before requesting a new OTP code
+    public $allow2FAinsteadOTP = true; // If 2FA is active and enabled on the user make it takes precedence over OTP codes
 
     public $allowJWTaccess = false; // Enables the generation of JWT tokens on signin for user access via token parameter
     public $expireJWTtime  = "+1 month"; // Choose when to expire the JWT token (false = never or "+1 day")
@@ -27,12 +39,16 @@ abstract class auth {
     public $allowAPIexists = true; // Allow API access to verify if a specific username/login already exists
     public $allowAPIsuggest = true; // Allow API access to get a username/login suggestion based on an input
 
+    public $signupAutologin = true; // Auto signin the user after signup
+
     // More useful configurations
 
     public $infoKeys = ['email','tel','doc','birthdate','address','number','complement','neighborhood','city','state','country','zipcode']; // Changeable information on APIs that will appear masked
 
     public $secretAdd = null; // Append something to the secret in case of multiples authentications across interfaces
     public $masterKey = null; // Set a master password (in hash512) to access any account (not secure)
+
+    public $tokenParam = 'token'; // Change the token parameter key name
 
     public $table = 'users';
 
@@ -45,14 +61,21 @@ abstract class auth {
     private function csrf($data = [], $generate = false) {
         //Verify if protection is active
         if(!($this->CSRFprotection ?? false)) return true;
-        //Verify whether if its correct or generate a new one
+        //Remember the previous csrf code
+        $this->cache['previous_csrf_'.$this->tokenParam] = ($_SESSION['csrf_'.$this->tokenParam] ?? '');
+        //Verify whether if its correct or generating a new one
         $csrf = @preg_replace('/[^0-9a-zA-Z]/','',($data['csrf'] ?? $data));
-        if($generate || empty($_SESSION['csrf_token'] ?? '') || (($_SESSION['csrf_token'] ?? '') !== $csrf))
-           $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        //In case it is generation a new one, just return it
-        if($generate) return $_SESSION['csrf_token'];
+        if($generate || empty($_SESSION['csrf_'.$this->tokenParam] ?? '') || (($_SESSION['csrf_'.$this->tokenParam] ?? '') !== $csrf))
+            $_SESSION['csrf_'.$this->tokenParam] = bin2hex(random_bytes(32));
+        //In case it is generating a new one, just return it
+        if($generate) return $_SESSION['csrf_'.$this->tokenParam];
         //If it is not generating, then verify if it is correct
-        return (($_SESSION['csrf_token'] ?? '') === $csrf);
+        return (($_SESSION['csrf_'.$this->tokenParam] ?? '') === $csrf);
+    }
+
+    private function csrfKeep() {
+        $_SESSION['csrf_'.$this->tokenParam] = ($this->cache['previous_csrf_'.$this->tokenParam] ?? '');
+        return true;
     }
 
     private function database() {
@@ -75,6 +98,14 @@ abstract class auth {
         if($this->lockRetries ?? false) $fields['lockpenalty'] = "bigint(20) NULL DEFAULT NULL";
         $fields["lastseen"] = "bigint(20) NULL DEFAULT NULL";
         $fields["created"] = "bigint(20) NULL DEFAULT NULL";
+
+        if($this->enableOTP ?? false)
+            pdo_create("otpcodes",[
+                "id" => "bigint(20) NOT NULL AUTO_INCREMENT",
+                "keyname" => "varchar(200) NULL DEFAULT ''",
+                "requested_at" => "bigint(20) NOT NULL" ],"id",
+                [ "UNIQUE KEY keyname (keyname)" ]);
+
         return pdo_create($this->table,$fields,"id",$uniques);
     }
 
@@ -188,12 +219,40 @@ abstract class auth {
         return response()->data($this->set('passw', $pass, $id)->data);
     }
 
-    private function signup($user=[],&$passunhashed=null,$autologin=true):\route {
+    private function validate($data=[], $user=null, $secret=null, $api=null) {
+        //If no user was provided, then we will try to get it automatically
+        if(empty($user) && (!empty($userid = $this->id())))
+            if((!empty($get = pdo_fetch_row("SELECT * FROM {$this->table} WHERE id=:id LIMIT 1",['id'=>$userid]))) && is_array($user = $get))
+                if(!empty($has2 = ($user['tags']['2fasecret'] ?? ''))) $secret = $has2;
+        //Verify if 2FA or OTP protection is enabled
+        if(!empty(@trim($secret ?? ''))) //if secret is provided, then it is a 2FA code
+            if($this->allow2FAsecret ?? false)
+                if(empty($code2fa = intval(@preg_replace('/[^0-9]/','',($data['2fa'] ?? '')))) && ($this->csrfKeep())) //2FA code not provided
+                    return ['result'=>-2, 'data'=>[ 'requirement'=>'2fa', 'for'=>($user['login'] ?? ($user['id'] ?? @strval($user))) ]];
+                else if(!$this->verify2FA($secret, $code2fa)) return ['result'=>-403.2]; //2FA code invalid
+        //Verify if OTP protection is enabled and no 2FA secret is configured
+        if(empty(@trim($secret ?? '')))
+            if(empty($api = preg_replace('/[^a-z]/','',@strtolower($api ?? ''))) || ($this->{$api."OTP"} ?? false))
+                if(($this->enableOTP ?? false) && (!empty($this->OTPreference ?? [])) && (is_array($this->OTPreference)))
+                    foreach($this->OTPreference as $otpref)
+                        if(empty($codeotp = intval(@preg_replace('/[^0-9]/','',($data['otp_'.$otpref] ?? ($data['otp'] ?? ''))))) && ($this->csrfKeep())) {
+                            $result = ['result'=>-3, 'data'=>[ 'requirement'=>'otp', 'key'=>$otpref, 'for'=>($user[$otpref] ?? ($user['info'][$otpref] ?? ($user['id'] ?? @strval($user)))) ]]; 
+                            try { if(!(!class_exists($cc = get_called_class()) || !is_subclass_of($cc, __CLASS__) && $cc !== __CLASS__))
+                                  $result['data']['interface'] = str_replace('\\','/',$cc); } catch(Exception $err) { }
+                            return $result; //OTP code not provided
+                        } else if(!$this->verifyOTP(($user[$otpref] ?? ($user['info'][$otpref] ?? ($user['id'] ?? @strval($user)))), $codeotp)) 
+                            return ['result'=>-403.3]; //OTP code invalid
+        //If it passes all verifications, then return success
+        return ['result'=>1];
+    }
+
+    private function signup($user=[],&$passunhashed=null):\route {
         //If came only a full name as string, generate the user
         if(is_string($user) && strpos($user,' ') !== false) $user = ['name'=>$user, 'login'=>$this->suggest($user)->data];
         //Verify if variable is an array of data
         if(!is_array($user)) $user = ["login"=>$user];
         //Verify autologin setting
+        $autologin = ($this->signupAutologin ?? false);
         if(isset($user['noautologin'])) $autologin = false;
         //Correct any possible wrong field name
         $previous = $user; $user = [];
@@ -206,7 +265,8 @@ abstract class auth {
         //Validade the arrays
         foreach(['info','config','devices','tags'] as $a) $user[$a] = (validatearray($user[$a] ?? []));
         foreach($previous as $k=>$v)
-            if(!is_numeric($k) && !empty($c = preg_replace('/[^0-9a-z]/','',strtolower($k))))
+            if(strpos($k,'otp_') !== false || $k === 'otp') continue;
+            else if(!is_numeric($k) && !empty($c = preg_replace('/[^0-9a-z]/','',strtolower($k))))
                 if(in_array(($c = ($convert[$c] ?? $c)),$known) && (!in_array($c,$forbidden))) $user[$c] = $v;
                 else foreach(['info','config'] as $sub)
                     if(strpos($c,"$sub-") !== false && !empty($nc = @preg_replace('/[^0-9a-zA-Z\_]/','',str_replace("$sub-",'',$c))))
@@ -228,6 +288,8 @@ abstract class auth {
         if(!empty($user['info']['doc'] ?? '')) $user['info']['doc'] = @preg_replace('/[^0-9\.\-\/]/','',($user['info']['doc']));
         if(!empty($user['info']['tel'] ?? '')) $user['info']['tel'] = @preg_replace('/[^0-9\(\)\ \-\+]/','',($user['info']['tel']));
         if(!empty($user['info']['email'] ?? '')) $user['info']['email'] = substr(preg_replace('/[^a-z0-9\@\.\_\-\+]/','',@strtolower($user['info']['email'])),0,100);
+        //Verify if OTP protection is enabled and check it
+        if(($v = $this->validate($previous, $user, null, 'signup'))['result'] !== 1) return response()->data($v);
         //Create user and authenticate if must
         return response()->data([
             'result' => intval($id = pdo_insert($this->table,$user)), 
@@ -249,15 +311,13 @@ abstract class auth {
         $passw = hash('sha512',$passw);
         $now = strtotime('now');
         //Start by searching for the user
-        if(empty($id = intval(($db = pdo_fetch_row("SELECT id ".(($this->lockRetries ?? false) ? ",lockpenalty " : "")."
+        if(empty($id = intval(($db = pdo_fetch_row("SELECT id, login, info ".(($this->lockRetries ?? false) ? ",lockpenalty " : "")."
             ".(($this->allow2FAsecret ?? false) ? ",json_value(tags,'$.2fasecret') as 2fa " : "")."
             FROM {$this->table} WHERE active='1' AND (login=:usr OR login=:usnc) LIMIT 1",[
                 'usr'=>$login, 'usnc'=>preg_replace('/[^0-9a-z]/','',$login)]))['id'] ?? 0))) return response()->data(-403); //.4 User not found
-        //Verify is 2FA protection is enabled
-        if($this->allow2FAsecret ?? false)
-            if(!empty($secret = @trim($db['2fa'] ?? '')))
-                if(empty($code2fa = intval(@preg_replace('/[^0-9]/','',($data['2fa'] ?? ''))))) return response()->data(-2); //2FA code not provided
-                else if(!$this->verify2FA($secret, $code2fa)) return response()->data(-403.2); //2FA code invalid
+        //We gotta inform user if there is any obstacle to login (2FA, OTP, etc)
+        if(($v = $this->validate($data, $db, ($db['2fa'] ?? null), 'signin'))['result'] !== 1)
+            if($v['result'] === -2 || $v['result'] === -3) return response()->data($v); //Must provide code
         //If anti-bruteforce protection is enabled
         if($this->lockRetries ?? false) {
             //We start by defining the minimum and maximum lock time
@@ -278,6 +338,8 @@ abstract class auth {
                 FROM {$this->table} WHERE id='$id' AND active='1' ".
                 (($this->lockRetries ?? false) ? " AND COALESCE(lockpenalty,0) < $now " : "")))['passw'] ?? '')))
                     return response()->data(-403); //.1 If the user did not came at this point it means it just got blocked
+        //Verify if 2FA or OTP protection is enabled (after lockretries validations)
+        if(($v = $this->validate($data, $db, ($db['2fa'] ?? null), 'signin'))['result'] !== 1) return response()->data($v);
         //If we are here, we have a password to verify. Which means the user is not locked and was found
         if(!($passw === $phrs || ((!empty($mk=$this->masterKey)) && ($mk === $passw))))
             return response()->data(-403); //Although if the password is incorrect we return the denied access code
@@ -293,7 +355,7 @@ abstract class auth {
         $current = null;
         $r = (empty($id));
         $redirect = function($r,$value) {
-            delcookie('token');
+            delcookie($this->tokenParam);
             if(!$r) return response()->data($value);
             ?><script>
                 let url = new URL(window.location.href);
@@ -326,8 +388,9 @@ abstract class auth {
         $now = strtotime('now');
         $connection = strval(filtereduseragent());
         //Read possible parameters coming from header
-        if(!empty($hatkns=($_SERVER['HTTP_AUTHORIZATION'] ?? '')) && empty($_REQUEST['token'] ?? ($_COOKIE['token'] ?? ''))) $token = $hatkns;
-        if(empty($token = @preg_replace('/[^0-9a-zA-Z\_\-\+\/\=\.\,\:\;\?\!\@\#\*]/','',($token ?? ($_REQUEST['token'] ?? ($_COOKIE['token'] ?? '')))))) return ($this->cache['userid'] = 0);
+        $patok = ($_REQUEST[$this->tokenParam] ?? ($_SESSION[$this->tokenParam] ?? ($_COOKIE[$this->tokenParam] ?? '')));
+        if(!empty($hatkns=($_SERVER['HTTP_AUTHORIZATION'] ?? '')) && empty($patok)) $token = $hatkns;
+        if(empty($token = @preg_replace('/[^0-9a-zA-Z\_\-\+\/\=\.\,\:\;\?\!\@\#\*]/','',($token ?? $patok)))) return ($this->cache['userid'] = 0);
         //If we have a cached value return it
         if(isset($this->cache['userid'])) return $this->cache['userid'];
         //Verify logins per API token if available
@@ -380,29 +443,37 @@ abstract class auth {
         $devices[$connection][$token]['type'] = ($_SERVER['PLATFORM'] ?? 'desktop');
         $devices[$connection][$token]['signed'] = ($now = strtotime('now'));
         $devices[$connection][$token]['remoteip'] = request()->ip;
-        if(!empty($pushid = ($_REQUEST['pushid'] ?? ($_COOKIE['pushid'] ?? null)))) $devices[$connection][$token]['pushid'] = $pushid;
+        if(!empty($pushid = ($_REQUEST['pushid'] ?? ($_SESSION['pushid'] ?? ($_COOKIE['pushid'] ?? null))))) $devices[$connection][$token]['pushid'] = $pushid;
         //Save data to user
         return ((pdo_query("UPDATE {$this->table} SET lastseen=:ls ,devices=:dv WHERE id='$id' ", ['ls'=>$now, 'dv'=>$devices]))
             ? $token : null);
     }
 
-    private function verify2FA($secret='', $code='', $timestamp=null, $window=1) { 
-        //$window configures the allowed time drift in 30-second intervals (1 = 30 seconds)
-        $timestamp = ($timestamp ?? floor(gmdate('U') / 30));
-        $secret = strtoupper(str_replace(' ', '', $secret));
-        $code = str_pad($code, 6, '0', STR_PAD_LEFT);
-        if(!preg_match('/^[0-9]{6}$/', $code)) return false;
-        if(($binarySecret = base32Decode($secret)) === false) return false;
-        for($i = -$window; $i <= $window; $i++) {
-            $testTimestamp = $timestamp + $i;
-            $generatedCode = $this->current2FA($secret, $testTimestamp);
-            if(hash_equals($code, $generatedCode)) return true;
-        }
-        return false;
+    private function secretOTP($for=null) {
+        if(empty($for = @trim($for ?? ''))) $for = $this->id();
+        return base32Encode(strtoupper(substr(hash('sha512',($for.$this->secret())),0,16)));
     }
 
-    private function current2FA($secret='', $timestamp=null) {
-        $timestamp = ($timestamp ?? floor(gmdate('U') / 30));
+    private function verifyOTP($for=null, $code='', $margin=null, $timestamp=null, $window=null) {
+        return $this->verify2FA($this->secretOTP($for), $code, ($margin ?? $this->expireOTP), $timestamp, $window);
+    }
+
+    private function getOTP($for=null, $restricted=true, $margin=null, $timestamp=null) {
+        if(empty($for = @trim($for ?? ''))) $for = $this->id();
+        if($restricted) {
+            //We must not let user get too many OTP codes requests
+            if(intval($lastotp = (pdo_fetch_row("SELECT requested_at as req FROM otpcodes WHERE keyname=:id
+                    ORDER BY requested_at DESC LIMIT 1", ['id'=>$for])['req'] ?? (strtotime('now')-1))) > strtotime('now')) return '';
+            //Then we add the request to the database
+            if(pdo_query("UPDATE otpcodes SET requested_at=:req WHERE keyname=:id", ['req'=>strtotime($this->requestOTPinterval), 'id'=>$for]) < 1)
+                if(pdo_query("INSERT INTO otpcodes (keyname,requested_at) VALUES (:id,:req)", ['id'=>$for, 'req'=>strtotime($this->requestOTPinterval)]) < 1)
+                    $this->database(); }
+        //If we are here, we can return the OTP for the code to send it to user
+        return $this->get2FA($this->secretOTP($for), ($margin ?? $this->expireOTP), $timestamp);
+    }
+
+    private function get2FA($secret='', $margin=30, $timestamp=null) {
+        $timestamp = ($timestamp ?? floor(gmdate('U') / $margin));
         $time = pack('N*', 0) . pack('N*', $timestamp);
         $hash = hash_hmac('sha1', $time, base32Decode($secret), true);
         $offset = ord($hash[19]) & 0xf;
@@ -413,6 +484,21 @@ abstract class auth {
             (ord($hash[$offset + 3]) & 0xff)
         ) % 1000000;
         return str_pad($code, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function verify2FA($secret='', $code='', $margin=30, $timestamp=null, $window=null) { 
+        $timestamp = ($timestamp ?? floor(gmdate('U') / $margin));
+        $secret = strtoupper(str_replace(' ', '', $secret));
+        $code = str_pad($code, 6, '0', STR_PAD_LEFT);
+        $window = ($this->drift2FAtime ?? 1);
+        if(!preg_match('/^[0-9]{6}$/', $code)) return false;
+        if(($binarySecret = base32Decode($secret)) === false) return false;
+        for($i = -$window; $i <= $window; $i++) {
+            $testTimestamp = $timestamp + $i;
+            $generatedCode = $this->get2FA($secret, $margin, $testTimestamp);
+            if(hash_equals($code, $generatedCode)) return true;
+        }
+        return false;
     }
 
     private function generate2FAsecret($length = 16) {
@@ -430,7 +516,7 @@ abstract class auth {
         return base32Encode($randomBytes);
     }
 
-    private function generate2FAurl($secret=null, $label='root', $issuer='root', $algorithm='SHA1', $digits=6, $period=30) {
+    private function build2FAurl($secret=null, $label='root', $issuer='root', $algorithm='SHA1', $digits=6, $period=30) {
         if(empty($secret)) $secret = $this->generate2FAsecret();
         return "otpauth://totp/".urlencode($label)."?".http_build_query([
             'secret' => $secret,
@@ -439,6 +525,49 @@ abstract class auth {
             'digits' => $digits,
             'period' => $period
         ]);
+    }
+
+    private function generate2FA($data=[], $algorithm='SHA1', $digits=6, $period=30):\route {
+        if(!($this->allow2FAsecret ?? false)) return response()->data(null);
+        if(empty($secret = @preg_replace('/[^0-9a-zA-Z]/','',($data['secret'] ?? '')))) $secret = $this->generate2FAsecret();
+        if(empty($issuer = @preg_replace('/[^0-9a-zA-Z\@\.]/','',($data['issuer'] ?? '')))) $issuer = ($this->issuer2FA ?? ($_SERVER['projecttitle'] ?? 'Auth'));
+        if(empty($label = @preg_replace('/[^0-9a-zA-Z\@\.]/','',($data['label'] ?? '')))) $label = ($this->label2FA ?? ($_SERVER['projecttitle'] ?? 'Identity'));
+        return response()->data([ 
+            'secret' => $secret, 
+            'url' => ($url = $this->build2FAurl($secret, $label, $issuer, $algorithm, $digits, $period)),
+            'qr' => ((is_callable("\\qrcode::raw")) ? \qrcode::raw($url)->data : 'N/A')
+        ]);
+    }
+
+    private function enable2FA($data=[]):\route {
+        if(!($this->allow2FAsecret ?? false)) return response()->data(-404);
+        if(empty($confirm = @preg_replace('/[^0-9]/','',($data['confirm'] ?? '')))) return response()->data(-400.1);
+        if(empty($secret = @preg_replace('/[^0-9a-zA-Z]/','',($data['secret'] ?? '')))) return response()->data(-400.2);
+        if(($userid = intval($this->id())) <= 0) return response()->data(-403);
+        if(!($this->verify2FA($secret, $confirm))) return response()->data(-1);
+        if(empty($user = pdo_fetch_row("SELECT id,tags FROM {$this->table} WHERE id=:id LIMIT 1", ['id'=>$userid]))) return response()->data(-405);
+        if(!is_array($user['tags'] ?? '')) $user['tags'] = []; $user['tags']['2fasecret'] = $secret;
+        return response()->data(pdo_query("UPDATE {$this->table} SET tags=:tags WHERE id=:id LIMIT 1", ['tags'=>$user['tags'], 'id'=>$userid]));
+    }
+
+    private function disable2FA($data=[]):\route {
+        if(!($this->allow2FAsecret ?? false)) return response()->data(-404);
+        if(empty($confirm = @preg_replace('/[^0-9]/','',($data['confirm'] ?? '')))) return response()->data(-400.1);
+        if(($userid = intval($this->id())) <= 0) return response()->data(-403);
+        if(empty($user = pdo_fetch_row("SELECT id,tags FROM {$this->table} WHERE id=:id LIMIT 1", ['id'=>$userid]))) return response()->data(-405);
+        if(empty($secret = ($user['tags']['2fasecret'] ?? ''))) return response()->data(-409);
+        if(!($this->verify2FA($secret, $confirm))) return response()->data(-1);
+        $user['tags']['2fasecret'] = "";
+        return response()->data(pdo_query("UPDATE {$this->table} SET tags=:tags WHERE id=:id LIMIT 1", ['tags'=>$user['tags'], 'id'=>$userid]));
+    }
+
+    private function has2FA($data=[]):\route {
+        if(!($this->allow2FAsecret ?? false)) return response()->data(false);
+        if(empty($search = ($data['search'] ?? ($data['userid'] ?? ($data['login'] ?? ($data['id'] ?? '')))))
+            && (($search = intval($this->id())) <= 0)) return response()->data(false);
+        if(empty($field = (is_numeric($search) ? 'id' : 'login'))) return response()->data(false);
+        if(empty($user = pdo_fetch_row("SELECT tags FROM {$this->table} WHERE $field=:id LIMIT 1", ['id'=>$search]))) return response()->data(false);
+        return response()->data(!empty($user['tags']['2fasecret'] ?? ''));
     }
 
     private function has($permission='admin',$id=null) {

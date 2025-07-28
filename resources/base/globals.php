@@ -898,12 +898,15 @@ class globals {
 
       /* urlhash control */
       $(window).on('onload',function(){
-          let [goes, querystr] = String(window.location.hash).split('/');
+          let goes = getitem('screen');
           let params = {};
-          if(!empty(querystr)) {
-            let paramstr = new URLSearchParams(querystr);
-            for (let [key, value] of paramstr.entries()) params[key] = value;
-          }
+          try {
+            let [goes, querystr] = String(window.location.hash).split('/');
+            if(!empty(querystr)) {
+              let paramstr = new URLSearchParams(querystr);
+              for (let [key, value] of paramstr.entries()) params[key] = value;
+            }
+          } catch(err) { }
           goes = String(goes).replace('#','').replace('home','');
           if(empty(goes) || String(goes).indexOf('_') > -1) goes = 'home';
           if(String('#'+goes) === getitem('screen')) {
@@ -914,18 +917,21 @@ class globals {
       });
 
       $(window).on('popstate',function(){
-          if(empty(String(window.location.hash).replace('#',''))) return;
-          let [screen, querystr] = String(window.location.hash).split('/');
-          let paramstr = new URLSearchParams(querystr || '');
-          let params = {};
-          if(!($(screen).length)) return;
-          if(!($(screen).hasClass('screen'))) return;
-          for (let [key, value] of paramstr.entries()) params[key] = value;
-          switchtab(screen,true,params,0);
+          try {
+            if(empty(String(window.location.hash).replace('#',''))) return;
+            let [screen, querystr] = String(window.location.hash).split('/');
+            let paramstr = new URLSearchParams(querystr || '');
+            let params = {};
+            if(!($(screen).length)) return;
+            if(!($(screen).hasClass('screen'))) return;
+            for (let [key, value] of paramstr.entries()) params[key] = value;
+            switchtab(screen,true,params,0);
+          } catch(err) { }
       });
 
       /* animation switch between .screen class */
       function switchtab(to,backwards,params,stinterval) {
+        try {
           if(typeof stinterval === 'undefined') stinterval = switchtabinterval;
           if(typeof params === 'undefined' || empty(params)) params = {};
           if(typeof backwards === 'object') {
@@ -948,10 +954,12 @@ class globals {
                   eventfire(String(to).replace(/[^0-9a-z\_]/gi,'')+'_onload');
                   $('.unlockscheduled.disabled').removeClass('disabled unlockscheduled');
                   $('html, body, fullscreen').scrollTop(0);
-                  const url = new URL(window.location);
-                  const queryParams = new URLSearchParams(params).toString();
-                  const newHash = String(`#${to}${queryParams ? '/' + queryParams : ''}`).replace('##','#');
-                  history.pushState(null, '', url.pathname + newHash);
+                  try {
+                    const url = new URL(window.location);
+                    const queryParams = new URLSearchParams(params).toString();
+                    const newHash = String(`#${to}${queryParams ? '/' + queryParams : ''}`).replace('##','#');
+                    history.pushState(null, '', url.pathname + newHash);
+                  } catch(err) { }
                   eventfire('screen_onready',{ ...{ 'from':before, 'to':to }, ...params });
               };
               if(stinterval > 1) return $(to).show('slide', optin, stinterval, gonext);
@@ -964,6 +972,7 @@ class globals {
           if(empty(vt)) return newview();
           if(stinterval > 1) return $(vt.join(',')).hide('slide', optout, stinterval, newview);
           $(vt.join(',')).hide(); newview();
+        } catch(err) { }
       }
 
       /* get value from memory */
@@ -1137,7 +1146,7 @@ class globals {
             let trigger = true;
             try { delete comp.elapsed; delete comp.overelapsed; } catch(err) { }
             try { if(!empty(params.preventlogout)) data.preventlogout = 1; } catch(e) { }
-            if(data?.result < 0) eventfire('resulterr',data);
+            if(data.result < 0) eventfire('resulterr',data);
             if(typeof cachectl !== 'boolean') {
               let a = cachestorage[cachecode];
               let b = comp;
@@ -1448,7 +1457,7 @@ class globals {
                   '<div class="alertpormodaldivmsg" style="position: fixed; top: 0px; left: 0px; right: 0px; bottom: 0px; z-index: 9999999;text-align:center;">'+
                   '<center class="classapmdm" style="position:relative;display:inline-block;width:auto;min-width:300px;max-width:88%;margin:4rem auto;float:center;text-align:center;">'+
                   '<div class="closebtnnoalertpormodal" onclick="alertpormodal(`:close`);" style="position:absolute;right: -1rem;top: -1rem;border:1px solid #999;border-radius:50%;background-color:var(--background,#eee);color:#999;padding: 0px 0.7rem 2px;font-size:24px;font-weight:bold;">&times;</div>'+
-                  '<div style="width:90%;height:auto;max-height:480px;max-height:77vh;overflow:auto;padding:1.5rem 1rem 1rem 1rem;background-color:var(--background,#fff);border-radius:10px;min-height: 70px;font-size:16px;">'+
+                  '<div style="height:auto;max-height:480px;max-height:77vh;overflow:auto;padding:1.5rem 1rem 1rem 1rem;background-color:var(--background,#fff);border-radius:10px;min-height: 70px;font-size:16px;">'+
                   '<div id="alertpmconteudo" style="max-width:100%;overflow:hidden;position:relative;"></div>'+
                   '</div></center></div>');
           if(closebutton === false) $('.alertpormodaldivmsg .closebtnnoalertpormodal').hide();

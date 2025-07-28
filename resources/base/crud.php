@@ -6,6 +6,7 @@ trait crud {
     //Implement crudPermissionHandler($data, $action, $table)){ return true; }; function on your class
 
     private static function convchars($string) {
+        if(empty(@preg_replace('/[0-9\.\+\-]/','',($string ?? '')))) return $string;
         if(is_callable('emojientities')) return emojientities($string);
         return htmlentities($string,ENT_QUOTES|ENT_HTML5,'UTF-8',false);
     }

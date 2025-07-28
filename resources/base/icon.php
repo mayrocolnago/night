@@ -1,5 +1,5 @@
 <?php
-class icons {
+class icon {
 
     public static $default = 'regular/square';
 
@@ -53,7 +53,7 @@ class icons {
                                  "success":function(data){ if(!empty(data)) printicon(item, data); } });
 
                     } else {
-                        let link = `${serveraddress}icons/get?name=${bname}/${cname}`;
+                        let link = `${serveraddress}<?=str_replace("\\","/",__CLASS__);?>/get?name=${bname}/${cname}`;
                         let cachename = `@cache_icon_${bname}_${cname}`;
                         let cache = getitem(cachename);
 
