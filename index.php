@@ -19,7 +19,7 @@ spl_autoload_register(function($c) {
           return true; }
 });
 
-if(!empty(($configdir = REPODIR).($configname = "config.".($_SERVER['PROJECT'] = basename(REPODIR)).".json").($confignp = "config.json")))
+if(!empty(($configdir = REPODIR).($configname = "config.".($_SERVER['PROJECT'] = substr(($r='-'.basename(REPODIR)),(strrpos($r,'-')+1),strlen($r))).".json").($confignp = "config.json")))
   for($i=0;$i<5;$i++) if(file_exists($configfile = "$configdir".DIRECTORY_SEPARATOR."config".DIRECTORY_SEPARATOR.".$configname") || file_exists($configfile = "$configdir".DIRECTORY_SEPARATOR.".$configname")
     ||(file_exists($configfile = "$configdir".DIRECTORY_SEPARATOR."config".DIRECTORY_SEPARATOR."$configname")) || file_exists($configfile = "$configdir".DIRECTORY_SEPARATOR."$configname")
     ||(file_exists($configfile = REPODIR.DIRECTORY_SEPARATOR.".$confignp")) || file_exists($configfile = REPODIR.DIRECTORY_SEPARATOR."$confignp"))
