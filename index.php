@@ -78,7 +78,8 @@ class response {
   public function code($integer=0) { return $this->json($integer); }
   public function data($output=null) { $this->data = $output; return route(); }
   public function json($return=null, $code=null, $applycode=null) { $this->data = $return;
-      if(is_string($return) && is_numeric($code ?? '')) $return = ['result'=>$code, 'message'=>$return];
+      if((is_bool($return) || is_numeric($return)) && is_array($code)) $return = ['result'=>$return, 'data'=>($this->data=$code)];
+      if(is_string($return) && (is_numeric($code) || is_bool($code))) $return = ['result'=>$code, 'message'=>$return];
       if(!is_array($return)) { $return = ['result'=>$return]; $rtcv = true; }
       if((!($rtcv ?? false)) && !isset($return['result'])) $return = ['result'=>count($return), 'data'=>$return];
       if(is_numeric($return['result']) && floatval($return['result']) < 0) $return['error'] = true;

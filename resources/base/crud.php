@@ -3,6 +3,8 @@ trait crud {
 
     //Implement $crudTable = 'table_name'; on your class
 
+    //Opcionally $crudDefaultSort = 'id ASC'; (default sorting is DESC)
+
     //Implement crudPermissionHandler($data, $action, $table)){ return true; }; function on your class
 
     private static function convchars($string) {
@@ -55,7 +57,7 @@ trait crud {
         $where = [];
         if(is_array($data))
             foreach($data as $k => $v)
-                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|]/','',str_replace('-','.',$k))))))
+                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
                     if(!(strpos($k,'.') !== false)) $where["`$k`"] = $v;
                     else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                             if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
@@ -63,7 +65,7 @@ trait crud {
         //returns
         $result = (pdo_fetch_array("SELECT * FROM $table ".((empty($where))?"":"WHERE ".
             preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace('|','',$a)." LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!'],'',$a).((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
             }, array_keys($where)))))." ORDER BY $order".((!empty($limit)) ? " LIMIT $limit" : ""), array_values($where)) ?? []);
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler') && empty($from)) self::crudCompletionHandler($data, ($from ?? __FUNCTION__), $table, $result);
@@ -112,7 +114,7 @@ trait crud {
         if(is_array($data))
             foreach($data as $k => $v)
                 if(strpos($k,':') !== false) //only enters on where when there is ":"
-                    if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|]/','',str_replace('-','.',$k))))))
+                    if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
                         if(!(strpos($k,'.') !== false)) $where[$k] = $v;
                         else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                                 if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
@@ -123,7 +125,7 @@ trait crud {
                 array_filter(array_map(function($a){ if(substr($a,0,2) == '--') return null; return " `$a` = ? "; }, array_keys($values))),
                 array_map(function($a,$b){ return " `$a` = $b "; }, array_keys($jsonvalues), array_values($jsonvalues)))).
             " WHERE ".preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace('|','',$a)."` LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace(['|','!'],'',$a)."`".((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
             }, array_keys($where)))), array_values(array_merge(array_values($values), array_values($where)))));
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler')) self::crudCompletionHandler($data, __FUNCTION__, $table, $result);
@@ -141,7 +143,7 @@ trait crud {
         $where = [];
         if(is_array($data))
             foreach($data as $k => $v)
-                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|]/','',str_replace('-','.',$k))))))
+                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
                     if(!(strpos($k,'.') !== false)) $where[$k] = $v;
                     else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                             if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
@@ -150,7 +152,7 @@ trait crud {
         if(empty($where)) $result = 0;
         else $result = intval(pdo_query("DELETE FROM $table WHERE ".
             preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace('|','',$a)."` LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace(['|','!'],'',$a)."`".((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
             }, array_keys($where)))), array_values($where)));
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler')) self::crudCompletionHandler($data, __FUNCTION__, $table, $result);

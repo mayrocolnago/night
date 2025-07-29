@@ -9,11 +9,9 @@ if(!isset($_SERVER['DEVELOPMENT']))
     ) $_SERVER['DEVELOPMENT'] = true;
 
 //CORS permissions
-$allowed_domains = [
-    '*'
-];
-if(in_array(($httporg='*'), $allowed_domains) || in_array(($httporg=($_SERVER['HTTP_ORIGIN'] ?? [])), $allowed_domains))
-    $_SERVER['headerCORS'] = $httporg;
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST");
+header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 //set timezone
 @date_default_timezone_set('America/Sao_Paulo');
