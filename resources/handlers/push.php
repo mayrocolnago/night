@@ -49,11 +49,11 @@ class push {
             'mensagem' => rmAentities($body ?? ''),
             'comando' => $msg, 'send_at' => $send_at ]);
         if(!$result && !is_array($queueonly)) return self::send($to,$body,$msg,$title,$send_at,$tags,self::database());
-        if(!$queueonly) self::async(function(){ \push::process_queue(['id'=>$result]); },[ 'result' => $result ]);
+        if(!$queueonly) self::async(function(){ \push::cron(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
 
-    public static function process_queue($data=[], $log=[]) {
+    public static function cron($data=[], $log=[]) {
         //load module
         if(!self::load()) return false;
         //catch either the queue or a specific item

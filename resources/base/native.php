@@ -1,7 +1,5 @@
 <?php
-namespace app\includes;
-
-class native {
+abstract class native {
 
     public static function js() {
         ?><script>
@@ -15,7 +13,7 @@ class native {
                 var paramset = { 'f':'foto', 'e':'jpg', 'p':'/', 'base64':'1', 'file':file };
                 try { if(!empty(autouploadextraparams) && (typeof autouploadextraparams == 'object' || typeof autouploadextraparams == 'array'))
                   paramset = { ...paramset, ...autouploadextraparams }; } catch(e) { }
-                curlsend('storage/send', paramset, null, null,
+                post('storage/send', paramset, null, null,
                 function(data){ if(typeof onsuccess !== 'function') return;
                     if(String(data.result).replace('null','').replace('undefined','').trim() == '') return onsuccess(file);
                     else onsuccess((typeof upstoragedefaultpathdir == 'undefined' ? '' : upstoragedefaultpathdir)+data.result); }); 
@@ -236,8 +234,7 @@ class native {
                 try { if(window.cordova.platformId && window.cordova.platformId == 'ios') thisisiphone = true; } catch(e) { }
 
                 try {
-                    if(thisisiphone)
-                        $('body').append(`<style id="iostoppadding">.screen { padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }</style>`);
+                    $('body').append(`<style id="statusbartoppadding">.screen { padding:env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }</style>`);
                 } catch(err) { }
 
                 try {

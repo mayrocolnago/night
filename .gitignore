@@ -11,7 +11,9 @@ config.json
 config.toml
 custom.php
 cache_*
+wip_*
 *disabled*
+*_template.json
 /assets/node_modules/
 /assets/platforms/
 /assets/plugins/

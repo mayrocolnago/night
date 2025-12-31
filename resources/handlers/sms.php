@@ -36,11 +36,11 @@ class sms {
         if(!empty(pdo_fetch_row("SELECT id FROM sms_queue WHERE (receipt='$number' or receipt='55$number') AND sendat > ".strtotime('-1 minute')." AND sendat < ".strtotime('+1 minute')))) return 1.1;
         $result = pdo_insert('sms_queue',['receipt'=>$number, 'sender'=>$sender, 'message'=>$message, 'sendat'=>$sendat]);
         if(!$result && !is_array($queueonly)) return self::send($number,$message,$sendat,$sender,self::database());
-        if(!$queueonly) self::async(function(){ \sms::process_queue(['id'=>$result]); },[ 'result' => $result ]);
+        if(!$queueonly) self::async(function(){ \sms::cron(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
 
-    public static function process_queue($data=[], $log=[]) {
+    public static function cron($data=[], $log=[]) {
         if(!self::load()) return false;
         //catch either the queue or a specific item
         if(!is_array($fila=pdo_fetch_array("SELECT * FROM sms_queue  

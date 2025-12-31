@@ -12,7 +12,8 @@ class email {
         'sender' => null, // default sender email same as from
         'user' => null, // can be the same configuration of sender
         'password' => null, // defaul email password auth
-        'encryption' => 'tls' // default encryption type
+        'encryption' => 'tls', // default encryption type
+        'integration' => 'smtp' // default smtp server
     ]];
 
     public static function database() {
@@ -49,16 +50,16 @@ class email {
         if(substr(($om=$body),0,3) == '<p>') //strpos($body,($tpltag='</tpl>')) !== false && !empty($om=str_replace($tpltag,'',$body)))
             if(file_exists($tpl=__DIR__.'/email.tpl') && !empty($body=@file_get_contents($tpl)))
                 if(!empty($body = str_replace(($dc='<div id="content">'),"$dc$om",$body)))
-                    if(!empty($body = str_replace('<code>','<p class="code" style="margin:32px 0px;background-color:rgba(255, 255, 255, 0.5);color:#00a551;padding:16px;font-weight:bold;font-size:18px;">',$body))) //mix-blend-mode:lighten;
+                    if(!empty($body = str_replace('<code>','<p class="code" style="margin:32px 0px;background-color:rgba(255, 255, 255, 0.5);color:#999999;padding:16px;font-weight:bold;font-size:18px;">',$body))) //mix-blend-mode:lighten;
                         $body = str_replace('</code>','</p>',$body);
         if(!empty(pdo_fetch_row("SELECT id FROM email_queue WHERE email='$email' AND sendat > ".strtotime('-1 minute')." AND sendat < ".strtotime('+1 minute')))) return 1.1;
         $result = pdo_insert('email_queue',['email'=>$email, 'subject'=>$subject, 'body'=>$body, 'sendat'=>$sendat, 'headers'=>$headers]);
         if(!$result && !is_array($queueonly)) return self::send($email,$subject,$body,$sendat,$headers,self::database());
-        if(!$queueonly) self::async(function(){ \email::process_queue(['id'=>$result]); },[ 'result' => $result ]);
+        if(!$queueonly) self::async(function(){ \email::cron(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
 
-    public static function process_queue($data=[], $log=[]) {
+    public static function cron($data=[], $log=[]) {
         //load module
         if(!self::load()) return false;
         //catch either the queue or a specific item
@@ -100,7 +101,7 @@ class email {
         $credentials = ((is_array(self::$credentials[0] ?? '')) ? self::$credentials : [self::$credentials]);
         //iterate through credentials
         foreach($credentials as $credential)
-            if(!empty($method = ((($credential['user'] ?? '') === 'apikey') ? 'sendgrid' : 'smtp'))) {
+            if(!empty($method = ((($credential['integration'] ?? '') === 'sendgrid') ? 'sendgrid' : 'smtp'))) {
                 $res=call_user_func_array("self::$method",[$to,$subject,$msg,$extra,$credential]);
                 $responses[] = $res; $retry++;
                 if($success = ($res['result'] ?? false)) break; }

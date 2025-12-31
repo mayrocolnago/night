@@ -7,7 +7,9 @@ trait crud {
 
     //Implement crudPermissionHandler($data, $action, $table)){ return true; }; function on your class
 
-    private static function convchars($string) {
+    public static function convchars($string) {
+        if(is_null($string) || is_bool($string)) return $string;
+        if(is_array($string) || is_object($string)) return $string;
         if(empty(@preg_replace('/[0-9\.\+\-]/','',($string ?? '')))) return $string;
         if(is_callable('emojientities')) return emojientities($string);
         return htmlentities($string,ENT_QUOTES|ENT_HTML5,'UTF-8',false);
@@ -57,15 +59,18 @@ trait crud {
         $where = [];
         if(is_array($data))
             foreach($data as $k => $v)
-                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
+                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k)))))) {
+                    if(($v = self::convchars($v)) === null) $k .= '^';
                     if(!(strpos($k,'.') !== false)) $where["`$k`"] = $v;
                     else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                             if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
-                                $where["json_value($primary,'\$.$subset')"] = self::convchars($value);
+                                $where["json_value($primary,'\$.$subset')"] = $v; }
         //returns
         $result = (pdo_fetch_array("SELECT * FROM $table ".((empty($where))?"":"WHERE ".
             preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!'],'',$a).((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!','^','~'],'',$a).
+                        ((strpos($a,'!') !== false && (!(strpos($a,'^') !== false))) ? " NOT" : "").
+                        ((strpos($a,'^') !== false) ? " IS ".((strpos($a,'!') !== false) ? "NOT " : "") : " LIKE ")."?");
             }, array_keys($where)))))." ORDER BY $order".((!empty($limit)) ? " LIMIT $limit" : ""), array_values($where)) ?? []);
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler') && empty($from)) self::crudCompletionHandler($data, ($from ?? __FUNCTION__), $table, $result);
@@ -103,7 +108,7 @@ trait crud {
                                     $jsonset[$primary][$subset] = $v; /* no conv needed at this point */ }
         //organize json set to add condition to update
         foreach($jsonset as $primary => $subset) {
-            $jsonvalues[$primary] = "json_set($primary";
+            $jsonvalues[$primary] = "json_set(if(json_valid($primary),if(($primary='[]'),'{}',$primary),'{}')";
             foreach($subset as $k => $v) {
                 $jsonvalues[$primary] .= ",'\$.$k',?";
                 $values["--".preg_replace('/[^0-9a-zA-Z]/','',"$primary$k")] = self::convchars($v); }
@@ -114,18 +119,21 @@ trait crud {
         if(is_array($data))
             foreach($data as $k => $v)
                 if(strpos($k,':') !== false) //only enters on where when there is ":"
-                    if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
+                    if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k)))))) {
+                        if(($v = self::convchars($v)) === null) $k .= '^';
                         if(!(strpos($k,'.') !== false)) $where[$k] = $v;
                         else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                                 if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
-                                    $where["json_value($primary,'\$.$subset')"] = self::convchars($value);
+                                    $where["json_value($primary,'\$.$subset')"] = $v; }
         //execute the update of values
         if(empty($where)) $result = 0;
         else $result = intval(pdo_query("UPDATE $table SET ".implode(', ',array_merge_recursive(
                 array_filter(array_map(function($a){ if(substr($a,0,2) == '--') return null; return " `$a` = ? "; }, array_keys($values))),
                 array_map(function($a,$b){ return " `$a` = $b "; }, array_keys($jsonvalues), array_values($jsonvalues)))).
             " WHERE ".preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace(['|','!'],'',$a)."`".((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!','^','~'],'',$a).
+                        ((strpos($a,'!') !== false && (!(strpos($a,'^') !== false))) ? " NOT" : "").
+                        ((strpos($a,'^') !== false) ? " IS ".((strpos($a,'!') !== false) ? "NOT " : "") : " LIKE ")."?");
             }, array_keys($where)))), array_values(array_merge(array_values($values), array_values($where)))));
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler')) self::crudCompletionHandler($data, __FUNCTION__, $table, $result);
@@ -143,16 +151,19 @@ trait crud {
         $where = [];
         if(is_array($data))
             foreach($data as $k => $v)
-                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k))))))
+                if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k)))))) {
+                    if(($v = self::convchars($v)) === null) $k .= '^';
                     if(!(strpos($k,'.') !== false)) $where[$k] = $v;
                     else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
                             if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
-                                $where["json_value($primary,'\$.$subset')"] = self::convchars($value);
+                                $where["json_value($primary,'\$.$subset')"] = $v; }
         //returns
         if(empty($where)) $result = 0;
         else $result = intval(pdo_query("DELETE FROM $table WHERE ".
             preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
-                return (((strpos($a,'|') !== false) ? "OR " : "AND ")."`".str_replace(['|','!'],'',$a)."`".((strpos($a,'!') !== false) ? " NOT" : "")." LIKE ?");
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!','^','~'],'',$a).
+                        ((strpos($a,'!') !== false && (!(strpos($a,'^') !== false))) ? " NOT" : "").
+                        ((strpos($a,'^') !== false) ? " IS ".((strpos($a,'!') !== false) ? "NOT " : "") : " LIKE ")."?");
             }, array_keys($where)))), array_values($where)));
         //triggers completion function checks
         if(is_callable('self::crudCompletionHandler')) self::crudCompletionHandler($data, __FUNCTION__, $table, $result);

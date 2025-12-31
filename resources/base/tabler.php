@@ -33,28 +33,32 @@ class tabler {
         ?><script>
             try { $('body').addClass('tabler-body-initialize'); } catch(err) { }
 
+            $(window).on('tabler_onstart',function(state){
+                try { $('body').addClass('tabler-body-initialize'); } catch(err) { }
+                
+                try { if($('.navbar').length)
+                    $('.navbar').parent().parent().parent().prepend($('.navbar'));  } catch(err) { }
+
+                try { if($('.navbar .nav-item .nav-link').length)
+                    $('.navbar .nav-item .nav-link').on('click',function(){
+                        if(!($('.navbar .navbar-toggler').is(':visible'))) return;
+                        $('.navbar .navbar-toggler').click(); }); } catch(err) { }
+
+                try { loadScript('/assets/www/js/tabler.min.js',function(){
+                    loadCss('/assets/www/css/tabler.min.css',function(){
+                        $('body').removeClass('tabler-body-initialize');
+                        eventfire('tabler_onload',{});
+                    });
+                }); } catch(err) { $('body').removeClass('tabler-body-initialize'); }
+            });
+
             $(window).on('tabler_onload', function(state){
                 if(!($('.tablerbar-menu-initialize').length)) return;
                 $('.tablerbar-menu-initialize').removeClass('tablerbar-menu-initialize');
             });
 
             $(window).on('onload',function(state){
-                $('body').addClass('tabler-body-initialize');
-                
-                if($('.navbar').length)
-                    $('.navbar').parent().parent().parent().prepend($('.navbar'));
-
-                if($('.navbar .nav-item .nav-link').length)
-                    $('.navbar .nav-item .nav-link').on('click',function(){
-                        if(!($('.navbar .navbar-toggler').is(':visible'))) return;
-                        $('.navbar .navbar-toggler').click(); });
-
-                loadScript('/assets/www/js/tabler.min.js',function(){
-                    loadCss('/assets/www/css/tabler.min.css',function(){
-                        $('body').removeClass('tabler-body-initialize');
-                        eventfire('tabler_onload',{});
-                    });
-                });
+                eventfire('tabler_onstart',{});
             });
         </script>
         <?php

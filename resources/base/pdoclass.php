@@ -136,6 +136,48 @@ class pdoclass {
 		return 0; else return $this->pdo_insert_id();
 	}
 
+	public function pdo_update($table,$data=[]) {
+		$where = []; $values = []; $jsonset = []; $jsonvalues = [];
+		$convchars = function($string) {
+			if(is_null($string) || is_bool($string)) return $string;
+			if(is_array($string) || is_object($string)) return $string;
+			if(empty(@preg_replace('/[0-9\.\+\-]/','',($string ?? '')))) return $string;
+			if(is_callable('emojientities')) return emojientities($string);
+			return htmlentities($string,ENT_QUOTES|ENT_HTML5,'UTF-8',false); };
+        if(is_array($data))
+            foreach($data as $k => $v)
+                if(!(strpos($k,':') !== false))
+                   if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|]/','',str_replace('-','.',$k))))))
+                       if(!(strpos($k,'.') !== false)) $values[$k] = $convchars($v);
+                       else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
+                               if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n)))) {
+                                    if(!isset($jsonset[$primary])) $jsonset[$primary] = [];
+                                    $jsonset[$primary][$subset] = $v; }
+        foreach($jsonset as $primary => $subset) {
+            $jsonvalues[$primary] = "json_set(if(json_valid($primary),if(($primary='[]'),'{}',$primary),'{}')";
+            foreach($subset as $k => $v) {
+                $jsonvalues[$primary] .= ",'\$.$k',?";
+                $values["--".preg_replace('/[^0-9a-zA-Z]/','',"$primary$k")] = $convchars($v); }
+            $jsonvalues[$primary] .= ")"; }
+        if(is_array($data))
+            foreach($data as $k => $v)
+                if(strpos($k,':') !== false)
+                    if(!empty(@preg_replace('/[^a-zA-Z]/','',($k = @preg_replace('/[^0-9a-zA-Z\.\_\|\!]/','',str_replace('-','.',$k)))))) {
+                        if(($v = $convchars($v)) === null) $k .= '^';
+                        if(!(strpos($k,'.') !== false)) $where[$k] = $v;
+                        else if(is_array($parse = explode('.',$k)) && !empty($primary = ($parse[0] ?? '')))
+                                if(!empty($subset = substr_replace($k, '', ((($p=strpos($k, ($n="$primary.")))===false)?0:$p), strlen($n))))
+                                    $where["json_value($primary,'\$.$subset')"] = $v; }
+        return intval($this->pdo_query("UPDATE $table SET ".implode(', ',array_merge_recursive(
+                array_filter(array_map(function($a){ if(substr($a,0,2) == '--') return null; return " `$a` = ? "; }, array_keys($values))),
+                array_map(function($a,$b){ return " `$a` = $b "; }, array_keys($jsonvalues), array_values($jsonvalues)))).
+            " WHERE ".preg_replace('/^(OR |AND )|(OR |AND )$/', '', implode(" ", array_map(function($a){
+                return (((strpos($a,'|') !== false) ? "OR " : "AND ").str_replace(['|','!','^','~'],'',$a).
+                        ((strpos($a,'!') !== false && (!(strpos($a,'^') !== false))) ? " NOT" : "").
+                        ((strpos($a,'^') !== false) ? " IS ".((strpos($a,'!') !== false) ? "NOT " : "") : " LIKE ")."?");
+            }, array_keys($where)))), array_values(array_merge(array_values($values), array_values($where)))));
+	}
+
 	public function pdo_fetch_item($statm, $vname=null) { return ($this->pdo_fetch_array($statm,$vname)[0] ?? []); }
 	
 	public function pdo_fetch_row($statm, $vname=null) { return ($this->pdo_fetch_array($statm,$vname)[0] ?? []); }

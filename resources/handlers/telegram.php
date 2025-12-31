@@ -2,8 +2,6 @@
 class telegram {
     use \thread;
 
-    public static $openapiOnly = ['callback']; // Add `bot` and `group` to get bot informations if necessary
-
     public static $chatlog = "";
     private static $botapi = '';
     
@@ -99,7 +97,7 @@ class telegram {
         ]);
     }
 
-    public static function process_queue($data=[], $log=[]) {
+    public static function cron($data=[], $log=[]) {
         if(!self::load()) return false;
         //catch either the queue or a specific item
         if(!is_array($fila=pdo_fetch_array("SELECT * FROM telegram_queue  
@@ -158,7 +156,7 @@ class telegram {
         if(!empty($lastid = (pdo_fetch_row("SELECT id FROM telegram_queue ORDER BY id DESC LIMIT 1")['id'] ?? null))) $lastid++;
         $result = pdo_insert("telegram_queue", ['id'=>$lastid, 'message'=>rmAentities($message ?? ''), 'chatid'=>$chatid, 'method'=>$method, 'params'=>$params, 'sendat'=>$sendat]);
         if(!$result && !is_array($queueonly)) return self::send($message,$chatid,$method,$params,$sendat,self::database());
-        if(!$queueonly) self::async(function(){ \telegram::process_queue(['id'=>$result]); },[ 'result' => $result ]);
+        if(!$queueonly) self::async(function(){ \telegram::cron(['id'=>$result]); },[ 'result' => $result ]);
         return $result;
     }
 
@@ -171,9 +169,9 @@ class telegram {
         return true;
     }
 
-    /* # If callback needed for commands use this route */
+    /* # If callback needed for commands use openapi */
 
-    public static function callback($data=[]):\route {
+    public static function callback($request=[]):\route {
         if(!self::load()) return response()->json(false);
         if(md5(self::$botapi) !== ($request['hash'] ?? '')) return response()->json(-405);
         if(is_array($request['callback_query'] ?? ''))
@@ -230,6 +228,11 @@ class telegram {
             if(!empty($line = trim($line)))
                 $response .= "/$line<br>";
         return self::respond($response);
+    }
+    
+    protected static function _execute($data=[], $cmd) {
+        if(empty($id=preg_replace('/[^0-9]/','',($cmd[0] ?? '')))) return self::respond('Formato: '.str_replace('_','/',__FUNCTION__).' [ID]');
+        return self::cron(['id'=>$id]);
     }
 
     protected static function _update($data=[], $cmd) {

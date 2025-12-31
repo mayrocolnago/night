@@ -1,7 +1,7 @@
 Options +FollowSymLinks
 
-php_value upload_max_filesize 99M
-php_value post_max_size 99M
+# php_value upload_max_filesize 99M
+# php_value post_max_size 99M
 
 RewriteEngine On
 

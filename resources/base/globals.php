@@ -30,7 +30,7 @@ class globals {
     curl_setopt_array($ch, $curlopts);
     $result = curl_exec($ch);
     curl_close($ch);
-    $_SERVER['curl_timer_elapsed'] = floatval(number_format(($mt = microtime(true)) - ($_SERVER['curl_timer_start'] ?? $mt),2,'.',''));
+    $_SERVER['curl_timer_elapsed'] = floatval_safe(($mt = microtime(true)) - ($_SERVER['curl_timer_start'] ?? $mt));
     $_SERVER['curl_timer'] = $_SERVER['curl_timer'] + $_SERVER['curl_timer_elapsed'];
     return $result;
   }
@@ -97,7 +97,7 @@ class globals {
   }
 
   /* base32 decode for 2fa totp codes */
-  function base32Decode($input='') {
+  public static function base32Decode($input='') {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     $input = strtoupper($input);
     $length = strlen($input);
@@ -117,7 +117,7 @@ class globals {
   }
 
   /* base32 encode for 2fa totp codes */
-  function base32Encode($data='') {
+  public static function base32Encode($data='') {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     $bits = ''; $result = '';
     for($i = 0; $i < strlen($data); $i++) $bits .= str_pad(decbin(ord($data[$i])), 8, '0', STR_PAD_LEFT);
@@ -179,8 +179,8 @@ class globals {
     if(is_string($value)) $value = emojientities($value);
     if(is_bool($value)) $value = (($value) ? "1" : "0");
     \globals::database(); $now = strtotime('now');
-    if(pdo_insert('global_configs',['ckey'=>$key, 'cvalue'=>$value, 'updated_at'=>$now])
-    ||(pdo_query("UPDATE global_configs SET cvalue=:v, updated_at=:u WHERE ckey=:c",['v'=>$value, 'u'=>$now, 'c'=>$key])))
+    if(pdo_query("UPDATE global_configs SET cvalue=:v, updated_at=:u WHERE ckey=:c",['v'=>$value, 'u'=>$now, 'c'=>$key])
+    ||(pdo_insert('global_configs',['ckey'=>$key, 'cvalue'=>$value, 'updated_at'=>$now])))
       return $_SERVER['configs'][$key];
     return null;
   }
@@ -611,11 +611,16 @@ class globals {
         [data-animate="right"] { transform: translate3d(+70px, 0, 0); }
         [data-animate].animate { filter:opacity(1) !important; transform: translate3d(0,0,0); }
 
-        @media only screen and (min-width: 769px) {
+        @media only screen and (min-width: 768px) {
           #app.fullscreen .screen .heading { max-width:600px; margin:auto; }
           *::-webkit-scrollbar { display: none; }
           * { -ms-overflow-style: none; scrollbar-width: none; }
           .footing:not(.nofootingcenter) { max-width:598px; margin:auto; }
+          .mobile-only { display:none !important; }
+        }
+
+        @media only screen and (max-width: 768px) {
+          .desktop-only { display: none !important; }
         }
         
         @keyframes spin {
@@ -664,6 +669,49 @@ class globals {
           animation: glowborderanimationframe 3s linear infinite;
         }
 
+        .glass {
+            background-color: rgba(0, 0, 0, 0.08);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.02) 50%, rgba(0, 0, 0, 0.22) 100%);
+            backdrop-filter: blur(15px) saturate(160%);
+            -webkit-backdrop-filter: blur(15px) saturate(160%);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+        }
+        .glass-light {
+            background-color: rgba(255, 255, 255, 0.08);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.17) 100%);
+            backdrop-filter: blur(15px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.25),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        .glass-text-black {
+            color: black;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+        }
+        .glass.glass-hover:hover {
+            background-color: rgba(0, 0, 0, 0.04);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.04) 100%);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3),
+                inset 0 0 0 2px rgba(126, 122, 122, 0.094),
+                0 0 0 2px rgba(255, 255, 255, 0.1);
+        }
+        .glass-light.glass-hover:hover {
+            background-color: rgba(255, 255, 255, 0.10);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.2),
+                0 0 0 2px rgba(255, 255, 255, 0.1);
+        }
+        
         .screen { padding-bottom:4rem; overflow:hidden; }
     </style><?php 
   }
@@ -1409,6 +1457,56 @@ class globals {
       /* function to get color of a string */
       function getcolorfromstr(string) {
         return '#'+String('000000'+String(string).replace(/[^0-9\a\b\c\d\e\f]/gi,'')).substr(-6);
+      }
+
+      /* md5 hash generator */
+      function md5(content) {
+        var innerMD5 = function (d) { return M(V(Y(X(d), 8 * d.length))) }
+        function M (d) {
+            for (var _, m = '0123456789abcdef', f = '', r = 0; r < d.length; r++) {
+                _ = d.charCodeAt(r);
+                f += m.charAt(_ >>> 4 & 15) + m.charAt(15 & _); }
+            return f; }
+        function X (d) {
+            for (var _ = Array(d.length >> 2), m = 0; m < _.length; m++) _[m] = 0;
+            for (m = 0; m < 8 * d.length; m += 8) _[m >> 5] |= (255 & d.charCodeAt(m / 8)) << m % 32;
+            return _; }
+        function V (d) { 
+          for (var _ = '', m = 0; m < 32 * d.length; m += 8) _ += String.fromCharCode(d[m >> 5] >>> m % 32 & 255); 
+          return _; }
+        function Y (d, _) {
+            d[_ >> 5] |= 128 << _ % 32
+            d[14 + (_ + 64 >>> 9 << 4)] = _
+            for (var m = 1732584193, f = -271733879, r = -1732584194, i = 271733878, n = 0; n < d.length; n += 16) {
+                var h = m; var t = f; var g = r; var e = i;
+                f = md5ii(f = md5ii(f = md5ii(f = md5ii(f = md5hh(f = md5hh(f = md5hh(f = md5hh(f = md5gg(f = md5gg(f = md5gg(f = md5gg(f = md5ff(f = md5ff(f = md5ff(f = md5ff(f, r = md5ff(r, i = md5ff(i, m = md5ff(m, f, r, i, d[n + 0], 7, -680876936), f, r, d[n + 1], 12, -389564586), m, f, d[n + 2], 17, 606105819), i, m, d[n + 3], 22, -1044525330), r = md5ff(r, i = md5ff(i, m = md5ff(m, f, r, i, d[n + 4], 7, -176418897), f, r, d[n + 5], 12, 1200080426), m, f, d[n + 6], 17, -1473231341), i, m, d[n + 7], 22, -45705983), r = md5ff(r, i = md5ff(i, m = md5ff(m, f, r, i, d[n + 8], 7, 1770035416), f, r, d[n + 9], 12, -1958414417), m, f, d[n + 10], 17, -42063), i, m, d[n + 11], 22, -1990404162), r = md5ff(r, i = md5ff(i, m = md5ff(m, f, r, i, d[n + 12], 7, 1804603682), f, r, d[n + 13], 12, -40341101), m, f, d[n + 14], 17, -1502002290), i, m, d[n + 15], 22, 1236535329), r = md5gg(r, i = md5gg(i, m = md5gg(m, f, r, i, d[n + 1], 5, -165796510), f, r, d[n + 6], 9, -1069501632), m, f, d[n + 11], 14, 643717713), i, m, d[n + 0], 20, -373897302), r = md5gg(r, i = md5gg(i, m = md5gg(m, f, r, i, d[n + 5], 5, -701558691), f, r, d[n + 10], 9, 38016083), m, f, d[n + 15], 14, -660478335), i, m, d[n + 4], 20, -405537848), r = md5gg(r, i = md5gg(i, m = md5gg(m, f, r, i, d[n + 9], 5, 568446438), f, r, d[n + 14], 9, -1019803690), m, f, d[n + 3], 14, -187363961), i, m, d[n + 8], 20, 1163531501), r = md5gg(r, i = md5gg(i, m = md5gg(m, f, r, i, d[n + 13], 5, -1444681467), f, r, d[n + 2], 9, -51403784), m, f, d[n + 7], 14, 1735328473), i, m, d[n + 12], 20, -1926607734), r = md5hh(r, i = md5hh(i, m = md5hh(m, f, r, i, d[n + 5], 4, -378558), f, r, d[n + 8], 11, -2022574463), m, f, d[n + 11], 16, 1839030562), i, m, d[n + 14], 23, -35309556), r = md5hh(r, i = md5hh(i, m = md5hh(m, f, r, i, d[n + 1], 4, -1530992060), f, r, d[n + 4], 11, 1272893353), m, f, d[n + 7], 16, -155497632), i, m, d[n + 10], 23, -1094730640), r = md5hh(r, i = md5hh(i, m = md5hh(m, f, r, i, d[n + 13], 4, 681279174), f, r, d[n + 0], 11, -358537222), m, f, d[n + 3], 16, -722521979), i, m, d[n + 6], 23, 76029189), r = md5hh(r, i = md5hh(i, m = md5hh(m, f, r, i, d[n + 9], 4, -640364487), f, r, d[n + 12], 11, -421815835), m, f, d[n + 15], 16, 530742520), i, m, d[n + 2], 23, -995338651), r = md5ii(r, i = md5ii(i, m = md5ii(m, f, r, i, d[n + 0], 6, -198630844), f, r, d[n + 7], 10, 1126891415), m, f, d[n + 14], 15, -1416354905), i, m, d[n + 5], 21, -57434055), r = md5ii(r, i = md5ii(i, m = md5ii(m, f, r, i, d[n + 12], 6, 1700485571), f, r, d[n + 3], 10, -1894986606), m, f, d[n + 10], 15, -1051523), i, m, d[n + 1], 21, -2054922799), r = md5ii(r, i = md5ii(i, m = md5ii(m, f, r, i, d[n + 8], 6, 1873313359), f, r, d[n + 15], 10, -30611744), m, f, d[n + 6], 15, -1560198380), i, m, d[n + 13], 21, 1309151649), r = md5ii(r, i = md5ii(i, m = md5ii(m, f, r, i, d[n + 4], 6, -145523070), f, r, d[n + 11], 10, -1120210379), m, f, d[n + 2], 15, 718787259), i, m, d[n + 9], 21, -343485551);
+                m = safeadd(m, h); f = safeadd(f, t); r = safeadd(r, g); i = safeadd(i, e); }
+            return [m, f, r, i];
+        }
+        function md5cmn (d, _, m, f, r, i) { return safeadd(bitrol(safeadd(safeadd(_, d), safeadd(f, i)), r), m); }
+        function md5ff (d, _, m, f, r, i, n) { return md5cmn(_ & m | ~_ & f, d, _, r, i, n); }
+        function md5gg (d, _, m, f, r, i, n) { return md5cmn(_ & f | m & ~f, d, _, r, i, n); }
+        function md5hh (d, _, m, f, r, i, n) { return md5cmn(_ ^ m ^ f, d, _, r, i, n); }
+        function md5ii (d, _, m, f, r, i, n) { return md5cmn(m ^ (_ | ~f), d, _, r, i, n); }
+        function safeadd (d, _) { var m = (65535 & d) + (65535 & _); return (d >> 16) + (_ >> 16) + (m >> 16) << 16 | 65535 & m; }
+        function bitrol (d, _) { return d << _ | d >>> 32 - _ }
+        function MD5Unicode(buffer){
+            if (!(buffer instanceof Uint8Array))
+                buffer = new TextEncoder().encode(typeof buffer==='string' ? buffer : JSON.stringify(buffer));
+            var binary = [];
+            var bytes = new Uint8Array(buffer);
+            for (var i = 0, il = bytes.byteLength; i < il; i++) 
+              binary.push(String.fromCharCode(bytes[i]));
+            return innerMD5(binary.join(''));
+        }
+        let result = 'abcdef1234567890abcdef1234567890';
+        try { result = MD5Unicode(content); } catch(err) { }
+        return result;
+      }
+
+      /* ucfirst equivalent */
+      function ucfirst(val) {
+        return String(val).charAt(0).toUpperCase() + String(val).slice(1);
       }
 
       /* validade brasilian document */

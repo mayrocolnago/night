@@ -44,6 +44,7 @@ abstract class auth {
     // More useful configurations
 
     public $infoKeys = ['email','tel','doc','birthdate','address','number','complement','neighborhood','city','state','country','zipcode']; // Changeable information on APIs that will appear masked
+    public $maskInfoKeys = true; // For Legal protection reasons, mask the users information by default
 
     public $secretAdd = null; // Append something to the secret in case of multiples authentications across interfaces
     public $masterKey = null; // Set a master password (in hash512) to access any account (not secure)
@@ -55,7 +56,7 @@ abstract class auth {
     private $cache = [];
 
     private function secret($default=null) {
-        return (($this->secretAdd ?? $this->table).($_SERVER['signature'] ?? ($_SERVER['SIGNATURE'] ?? ($_SERVER['secret'] ?? ($_SERVER['SECRET'] ?? md5(REPODIR))))));
+        return (($default ?? ($this->secretAdd ?? $this->table)).($_SERVER['signature'] ?? ($_SERVER['SIGNATURE'] ?? ($_SERVER['secret'] ?? ($_SERVER['SECRET'] ?? md5(REPODIR))))));
     }
 
     private function csrf($data = [], $generate = false) {
@@ -78,7 +79,7 @@ abstract class auth {
         return true;
     }
 
-    private function database() {
+    private function database($tablename=null) {
         $fields = [
             "id" => "bigint(20) NOT NULL AUTO_INCREMENT", //Core reference of user
             "active" => "tinyint(1) DEFAULT '1'", //Whether user is active or not
@@ -106,7 +107,7 @@ abstract class auth {
                 "requested_at" => "bigint(20) NOT NULL" ],"id",
                 [ "UNIQUE KEY keyname (keyname)" ]);
 
-        return pdo_create($this->table,$fields,"id",$uniques);
+        return pdo_create(($tablename ?? $this->table),$fields,"id",$uniques);
     }
 
     private function isauthed($data=[]):\route {
@@ -142,7 +143,7 @@ abstract class auth {
                 else if(in_array($k,$prohibid) && (!$mask)) $user[$k] = $v;
                 else if(in_array($k,$treats) && $k === 'permission') $user[$k] = array_filter(explode(',',','.($v ?? '')));
                 else if(in_array($k,$treats) && $k === 'active') $user[$k] = (intval($v ?? 0) === 1); 
-                else if(in_array($k,$treats) && $k === 'info') $user[$k] = str_maskmiddle_array($v,[],3); }
+                else if(in_array($k,$treats) && $k === 'info') $user[$k] = (($this->maskInfoKeys) ? str_maskmiddle_array($v,[],3) : $v); }
             //Gether specific function data
             if($this->lockRetries ?? false) $user['locked'] = (($info['lockpenalty'] ?? 0) > strtotime('now'));
             if($this->useDeviceAuth ?? false) $user['deviceauthed'] = $this->isverified();
@@ -415,7 +416,7 @@ abstract class auth {
         if(empty($stpart = ($sep[0] ?? ''))) return ($this->cache['userid'] = 0);
         if(empty($ndpart = ($sep[1] ?? ''))) return ($this->cache['userid'] = 0);
         //Get user to see if token is valid
-        if(empty($user = pdo_fetch_row("SELECT passw, devices FROM {$this->table} WHERE id=:id LIMIT 1",['id'=>$id]))) return ($this->cache['userid'] = 0);
+        if(empty($user = pdo_fetch_row("SELECT passw, devices FROM {$this->table} WHERE id=:id AND active='1' LIMIT 1",['id'=>$id]))) return ($this->cache['userid'] = 0);
         if(empty($pw = ($user['passw'] ?? ''))) return ($this->cache['userid'] = 0);
         if(!is_array($devices = ($user['devices'] ?? ''))) return ($this->cache['userid'] = 0);
         //Verify hash that came on token
@@ -451,7 +452,7 @@ abstract class auth {
 
     private function secretOTP($for=null) {
         if(empty($for = @trim($for ?? ''))) $for = $this->id();
-        return base32Encode(strtoupper(substr(hash('sha512',($for.$this->secret())),0,16)));
+        return base32Encode(strtoupper(substr(hash('sha512',($for.$this->secret('otp'))),0,16)));
     }
 
     private function verifyOTP($for=null, $code='', $margin=null, $timestamp=null, $window=null) {
@@ -629,7 +630,7 @@ abstract class auth {
             $calledClass = get_called_class();
             if(!class_exists($calledClass) || !is_subclass_of($calledClass, __CLASS__) && $calledClass !== __CLASS__) return null;
             $instance = new $calledClass(); }
-        $return = $instance->{$name}(...$arguments);
+        $return = ($instance->{@preg_replace('/[^a-zA-Z\0-9\_]/','',$name)} ?? ($instance->{$name}(...$arguments) ?? null));
         if($return instanceof \route) return $return->data;
         return $return;
     }
