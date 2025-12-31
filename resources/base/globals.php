@@ -472,6 +472,7 @@ class globals {
     $intable = false;
     $tableheader = false;
     $tablecontent = [];
+    $markdown = str_replace(['<', '>'], ['&lt;', '&gt;'], $markdown);
     if(is_array($lines = explode("\n", str_replace('<br/>',"\n",$markdown))))
       foreach($lines as $i => $line) {
         if(empty(trim($line))) $html .= "<br/>\n";
@@ -498,6 +499,7 @@ class globals {
             $line = preg_replace('/\'(.*?)\'(.*?)\'(.*?)\'/', '\'<span style="color:normal;">$1</span>\'$2\'<span style="color:#FF9800;">$3</span>\'', $line);
             $line = preg_replace('/&quot;(.*?)&quot;(.*?)&quot;(.*?)&quot;/', '&quot;<span style="color:normal;">$1</span>&quot;$2&quot;<span style="color:#FF9800;">$3</span>&quot;', $line);
             $line = preg_replace('/(.*?)\((.*?)\)/', '<span style="color:#03A9F4;">$1</span>(<span style="color:#8BC34A;">$2</span>)', $line);
+            $line = str_replace(['&amp;lt;', '&amp;gt;'], ['&lt;', '&gt;'], $line);
             $line = str_replace([$ca('['),$ca(']')],['<span style="color:#3F51B5;">'.$ca('[').'</span>','<span style="color:#3F51B5;">'.$ca(']').'</span>'],
                     str_replace([$ca('{'),$ca('}')],['<span style="color:#607D8B;">'.$ca('{').'</span>','<span style="color:#607D8B;">'.$ca('}').'</span>'],
                     str_replace([$ca('"'),$ca(',')],['<span style="color:#999999;">'.$ca('"').'</span>','<span style="color:#795548;">'.$ca(',').'</span>'],
@@ -547,7 +549,8 @@ class globals {
         $processedLine = preg_replace('/\*\*(.*?)\*\*/', '<b>$1</b>', $processedLine);
         $processedLine = preg_replace('/\*(.*?)\*/', '<i>$1</i>', $processedLine);
 
-        if(substr($processedLine,0,2) === '> ') $processedLine = "<div style=\"margin:1rem 0px 0px 0px;padding:6px 6px;background-color:rgb(153,153,153,0.15);border-left:5px solid #999;\">".substr($processedLine,2)."</div>";
+        if(substr($processedLine,0,5) === '&gt; ') $processedLine = "<div style=\"margin:1rem 0px 0px 0px;padding:6px 6px;background-color:rgb(153,153,153,0.15);border-left:5px solid #999;\">".substr($processedLine,5)."</div>";
+        if(substr($processedLine,0,4) === '&lt;') $processedLine = str_replace(['&lt;', '&gt;'], ['<', '>'], $processedLine);
 
         if(substr($processedLine,0,4) === '### ') $processedLine = "<h3 id=\"".preg_replace('/[^0-9a-z]/','-',strtolower(substr($processedLine,4)))."\" style=\"margin:1rem 0px 0px 0px;\">".substr($processedLine,4)."</h3>";
         if(substr($processedLine,0,3) === '## ') $processedLine = "<h2 id=\"".preg_replace('/[^0-9a-z]/','-',strtolower(substr($processedLine,3)))."\" style=\"margin:1rem 0px 0px 0px;\">".substr($processedLine,3)."</h2>";
