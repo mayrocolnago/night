@@ -74,6 +74,8 @@ NIGHT is built around a few core concepts:
 
 ## Routing System
 
+Use the `/resources` folder to get started with your code.
+
 The framework uses a simple routing system based on class and function parameters in the URL:
 
 ```
