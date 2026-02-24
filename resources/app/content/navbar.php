@@ -35,7 +35,7 @@ class navbar {
         <header class="navbar navbar-expand-md navbar-light">
             <div class="container-fluid tablerbar-menu-initialize">
                 <a class="navbar-brand" href="#">
-                    <img src="/assets/www/img/logo.png" alt="Logo">
+                    <img src="/assets/img/logo.png" alt="Logo">
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu">
                     <span class="navbar-toggler-icon"></span>
