@@ -1,7 +1,7 @@
 # NIGHT Framework
 
-<img align="left" border="0" src="https://raw.githubusercontent.com/mayrocolnago/night/refs/heads/master/assets/www/img/logo.png" width="70" height="auto">
-NIGHT is a lightweight, flexible PHP framework designed for rapid application development with a focus on API creation, resource management, and asynchronous processing. This framework provides a simple yet powerful structure for building web applications and APIs with minimal configuration.
+<img align="left" border="0" src="https://raw.githubusercontent.com/mayrocolnago/night/refs/heads/master/assets/img/logo.png" width="70" height="auto">
+NIGHT is a lightweight, flexible PHP framework designed for rapid application development with a focus on API creation, resource management, and asynchronous processing. This framework provides a simple yet powerful structure for building API driven web applications with minimal configuration.
 
 
 ## Table of Contents
@@ -24,7 +24,7 @@ NIGHT is a lightweight, flexible PHP framework designed for rapid application de
 
 ### Tech stack ready-to-go
 
-- Docker/PHP 7.4 or higher with mod_rewrite enabled
+- Tested with Docker/PHP 7.4 on Apache with mod_rewrite enabled
 - MySQL/MariaDB database
 
 ### Installation
@@ -47,6 +47,20 @@ NIGHT is a lightweight, flexible PHP framework designed for rapid application de
 }
 ```
 
+More configuration example
+
+```json
+{
+  "bundlename":"com.project",
+  "projectsite":"https://project.com/",
+  "description":"Project Description",
+  "keywords":"Project, Keywords",
+  "authorname":"Project Author",
+  "androidversion":"10001",
+  "iosversion":"1.0.0"
+}
+```
+
 ## Core Concepts
 
 NIGHT is built around a few core concepts:
@@ -54,15 +68,16 @@ NIGHT is built around a few core concepts:
 1. **Class-based routing**: URLs map to classes and methods (just like Laravel)
 2. **Autoloading**: Classes are automatically loaded from the resources directory
 3. **API-first design**: Built-in support for JSON API responses
-4. **Resource management**: Dynamic loading of HTML, CSS, and JS content
-5. **Asynchronous processing**: Queue-based handling of tasks like emails and notifications
+4. **Resource management**: Dynamic loading of HTML, CSS, and JS content (through `\dcl` module)
+5. **Asynchronous processing**: Queue-based handling of tasks like emails and notifications with Promises
+6. **Auto-inclusion**: For automatic module loading (for files in `includes` directory)
 
 ## Routing System
 
 The framework uses a simple routing system based on class and function parameters in the URL:
 
 ```
-https://yourdomain.com/{class}/{function}?param1=value1&param2=value2
+https://yourdomain.com/[{namespace/folder}/]{class}/{function}?param1=value1&param2=value2
 ```
 
 For example:
@@ -70,13 +85,35 @@ For example:
 - `https://site.com/page` calls the `index()` method of the `page` class (ak.a. `\page::index()`)
 - `https://site.com/app/api` calls the `api()` method of the `app` class (ak.a. `\app::api()`)
 - `https://site.com/app/other/api` calls the `api()` method of the `other` class on the `app` namespace (ak.a. `\app\other::api()`)
-- `https://site.com/app/more/another/func` calls the `func()` method of the `another` class on the `app\more` namespace (ak.a. `\app\more\another::func()`)
+- `https://site.com/app/more/another/page` calls the `page()` method of the `another` class on the `app\more` namespace (ak.a. `\app\more\another::page()`)
 
-If no function is specified, `index()` method is called by default. And if nothing is called on the root, `site` class is called by default.
+Considering the directory tree under `/resources` folder for the URLs example above:
+- `/resources/site.php` with a class `site` and a method/function `index` inside
+- `/resources/page.php` with a class `page` and a method/function `index` inside
+- `/resources/app.php` with a class `app` and a method/function `api` inside
+- `/resources/app/other.php` with a class `other` under the `app` namespace and a method/function `api` inside
+- `/resources/app/more/another.php` with a class `another` under the `app\more` namespace and a method/function `page` inside
 
-### Creating a Basic Route
+And every accessible method/function having `\route` class as return type to make it an accessible endpoint through URL.
 
-Create a new PHP file `test.php` in the `resources` directory:
+For example, the content of a file on `/resources/app/more/another.php`:
+
+```php
+namespace app\more;
+
+class another {
+    public static function page($data=[]):\route {
+        ?><div>Page</div><?php 
+    }
+}
+```
+
+> Note: If no function is specified, `index()` method is called by default. And if nothing is called on the root, `site` class is called by default.
+
+
+### Creating a Basic Route for a Page + an API
+
+Create a new PHP file `/resources/test.php`:
 
 ```php
 class test {
@@ -89,7 +126,7 @@ class test {
     }
 
     public static function api($data=[]):\route {
-        return response()->json(["message" => "Hello", "from" => "test", "params" => $data]); // When returning JSON "response()->json()" is necessary
+        return result(["message" => "Hello", "from" => "test", "params" => $data]); // Returning result route object to exit as an API
         // This will return a JSON response like:
         // {"result":3,"data":{"message":"Hello","from":"test","params":{"param":"value"}}}
         // (3 as of the amount of information on `data`. Useful to count results of a database query dump)
@@ -101,34 +138,39 @@ Now you can access:
 - `https://yourdomain.com/test` - Returns HTML "Hello World"
 - `https://yourdomain.com/test/api?param=value` - Returns JSON response
 
-No need to configure extra route files or any sort of thing. It all works automaticly.
+No need to configure extra route files or any sort of thing. It all works automaticaly.
 
 ## API Development
 
-NIGHT makes it easy to create APIs using the `openapi` trait:
+NIGHT makes it easy to create APIs through the accessable methods having `\route` class and an default structured return value:
 
 ```php
 class api {
 
     public static function string($data=[]):\route { 
-        return response()->json('Hello World'); // Returns {"result":"Hello World"}
+        return result('Hello World'); // Returns {"result":"Hello World"}
     }
 
     public static function number($data=[]):\route { 
-        return response()->json(42); // Returns {"result":42}
+        return result(42); // Returns {"result":42}
     }
 
     public static function array($data=[]):\route { 
-        return response()->json(["name" => "John", "age" => 30]); // Returns {"result":2,"data":{"name":"John","age":30}}
+        return result(["name" => "John", "age" => 30]); // Returns {"result":2,"data":{"name":"John","age":30}}
     }
 
     public static function test($data=[]):\route { 
-        return response()->json(["result" => 2, "something" => 3]); // Returns {"result":2,"something":3} on result level 
+        return result(["result" => 2, "something" => 3]); // Returns {"result":2,"something":3} on result level 
         //(because there is "result" key on the array)
     }
 
     public static function params($data=[]):\route { 
-        return response()->json($data); // Returns all parameters passed in the request {"result":1,"data":[...data]}
+        return result($data); // Returns all parameters passed in the request. ex. {"result":1,"data":{"param1":"value1"}}
+        // If hitting the URL by https://yourdomain.com/api/params?param1=value1 or via POST method
+    }
+
+    public static function something($data=[]) { 
+        return 'whatever'; //not an accessible endpoint (because there is no \route)
     }
 }
 ```
@@ -144,12 +186,12 @@ The framework automatically formats API responses as JSON with the following str
   "header": null,     // Content-Type header return
   "policy": null,     // CORS header return
   "page":   integer,  // current page of listing/pagination
-  "data":   ...       // returned data (array boolean or text)
+  "data":   ...       // returned when array data
 }
 ```
 
-- `result`: Can be a number (count of items), boolean, or string
-- `data`: Contains the data of a result if it is an array or object
+- `result`: Can be a number, amount of items in "data", boolean, or string
+- `data`: Contains the data of a result if it is an array/object
 - `elapsed`: Time taken to process the request in seconds
 - `http`: HTTP status code
 - `state`: Always 1 for successful connection responses
@@ -188,7 +230,7 @@ Other parameters:
 | state | Default: 1. To identify that the connection was successful with the server/API |
 | header | Identifier for applying `header("Content-Type: application/json")`. Typically null or false if not applied |
 | policy | Identifier for applying `header("Access-Control-Allow-Origin: *")`. Typically null or false if not applied |
-| error | This key will appear as `true` if result has a negative value |
+| error | This key will appear as `true` automaticaly if result has a negative value |
 | page | Current page which the API is filtering the results `?page=1` |
 | data | Data return parameter |
 
@@ -200,34 +242,39 @@ The framework includes a PDO wrapper class for database operations:
 
 ```php
 // Create a table
-$fields = pdo_create("users",[
+$fields = \db::create("users",[
     "id" => "int NOT NULL AUTO_INCREMENT",
     "name" => "varchar(255) NOT NULL",
     "email" => "varchar(255) NOT NULL"
 ]); // returns an array with the fields keys ['id','name','email']
 
-// Execute a query
-$update = pdo_query("UPDATE users SET name='Josh' WHERE id=:id", ['id'=>1]);
+// Insert data easily
+$id = \db::insert("users", ["name" => "John", "email" => "john@example.com"]); //returns last inserted id
 
 // Fetch results
-$result = pdo_query("SELECT * FROM users WHERE id=:id", ['id'=>1]);
+$list = \db::fetch("SELECT * FROM users WHERE id=:id", ['id'=>1]); //returns an array of items
 
-// Insert data
-$id = pdo_insert("users", ["name" => "John", "email" => "john@example.com"]); //returns last insert id
+// Executes any sort of query
+$update = \db::query("UPDATE users SET name='Josh' WHERE id=:id", ['id'=>1]); //returns number of affected rows
 
+// Update data easily
+$success = \db::update("users", ["email" => "doe@example.com", ":name" => "John"]); //returns number of affected rows
+ 
 // Get last insert ID
-$lastId = pdo_insert_id();
+$lastId = \db::insert_id();
 ```
 
-It opcionally also allows you to instantiate multiple connections if you need:
+Any direct call to the `\db` module will automatically initiate the default database connection configured on [`.config.json` file](#project-configuration)
+
+This module also opcionally allows you to instantiate multiple connections if you need:
 
 ```php
 // Default connection
-$users = pdo_fetch_array("SELECT * FROM database1.users");
+$users = \db::fetch("SELECT * FROM database1.users");
 
 // Other connection
-$another = new pdoclass('mysql:host=localhost:3306;dbname=database2','user','pass');
-$another->pdo_query("SELECT * FROM database2.users");
+$another = new \db('mysql:host=localhost:3306;dbname=database2','user','pass');
+$another->fetch("SELECT * FROM database2.users");
 
 // Default will still continue working
 ```
@@ -242,14 +289,14 @@ The `crud` trait provides a simple way to implement CRUD operations:
 class cart {
     use \crud;
     
-    public static $crudTable = "cart";
+    public static $crudTable = "cart"; //enter the table name
 
-    // Method `create` will be available because of `crud` trait
-    // Along with all others from `crud` trait
+    // Method route `create` will be available because of `crud` trait
+    // Along with all others methods from `crud` trait
 
     // To limit the availability of APIs access, consider using the permisson handling method.
     // This will be trigger automatically before every CRUD action for this module
-    public static function crudPermissionHandler($data=[], $action, $table){
+    public static function crudPermissionHandler($data=[], $action, $table) {
         if($action === 'delete') return false; //This will prevent from deleting
         return true; //Otherwise, allow it
     }
@@ -258,11 +305,9 @@ class cart {
         ?><script>
             function add_to_cart(productid) {
                 /* We create an error handler to deal with unsuccessful requests */
-                let errorhandler = function(obj){
-                    console.log('Could not add to cart',obj);
-                };
-                /* We can use `curl` function from `\globals` module */            
-                curlsend("cart/create",{"product_id":productid},function(data){
+                let errorhandler = function(obj){ console.log('Could not add to cart',obj); };
+                /* We can use `curl` function from `\utils` module */            
+                curlsend("cart/create",{"product_id":productid},function(data){ /* $.ajax() will also do the trick */
                     /* We always check first if there is no errors */
                     if(!data || data.error) return errorhandler(data);
                     /* Then we do everything we need to do */
@@ -273,7 +318,6 @@ class cart {
                 },function(always){
                     /* Always execute after running the above functions */
                 });
-
                 /* Learn more about permission handling by looking at `crud.php` file */
             }
         </script><?php
@@ -282,8 +326,9 @@ class cart {
 ```
 
 Another **CRUD** methods and usages:
+
 ```php
-//In extension to `cart` example
+//In addition to `cart` example
 
 // Creates a row with columns `name` and `email` filled with `John` and `john@example.com` respectively
 $userId = \cart::create(["name" => "John", "email" => "john@example.com"]);
@@ -306,11 +351,11 @@ $users = \cart::list([":name" => "John%"]);
 // Returns {"result":1, ...} meaning how much rows were deleted
 ```
 
-Use ":" for searching and "|" for `OR` conditioning
+Use ":" for searching and "|" for `OR` conditioning (which in the case, ordering of params matter)
 
 ### Dynamic Content Loading
 
-The `assets` module allows you to dynamically load HTML, CSS, and JavaScript content from a entire folder:
+The `\dcl` module allows you to dynamically load HTML, CSS, and JavaScript content from a entire folder:
 
 File: `/resources/app.php`
 
@@ -319,7 +364,7 @@ class app {
 
     public static function index($data=[]):\route {
         // This will load all CSS, HTML, and JS from the "app" namespace.
-        exit(\assets::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
+        exit(\dcl::show(__CLASS__)); /* __CLASS__ being "app", so it will load all files from the folder "app" if it exists */
     }
 }
 ```
@@ -403,7 +448,7 @@ $fileId = \storage::send([
     'f' => 'profile', // File prefix
     'p' => 'users/', // Path
     'e' => 'jpg' // Extension can be auto detected
-]);
+]); //returns the filename on {"result":"..."}
 
 // Get file contents
 $fileContents = \storage::get_contents('/storage/users/profile_123.jpg');
@@ -419,7 +464,7 @@ The storage module supports various upload methods:
 1. **Form upload**:
 ```html
 <form method="post" action="/storage/send" enctype="multipart/form-data">
-    <input type="file" name="file">
+    <input type="file" name="file"> <!-- to send the file as multipart form-data -->
     <input type="hidden" name="f" value="profile">
     <input type="hidden" name="p" value="users/">
     <button type="submit">Upload</button>
@@ -430,7 +475,7 @@ The storage module supports various upload methods:
 ```js
 let base64Data = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD...";
 let result = curlsend('storage/send',{
-    "base64": 1,
+    "base64": 1, /* to send the base64 file contents */
     "file": base64Data,
     "f": "profile",
     "p": "users/"
@@ -440,7 +485,7 @@ let result = curlsend('storage/send',{
 3. **URL upload**:
 ```js
 let result = curlsend('storage/send',{
-    "fromurl": 1,
+    "fromurl": 1, /* for copying from somewhere else */
     "file": "https://example.com/image.jpg",
     "f": "profile",
     "p": "users/"
@@ -466,6 +511,7 @@ The framework includes a JavaScript helper for file uploads:
                 console.log("File URL:", ondone.url);
         });
 </script>
+<!-- Then any file selection will be automatically uploaded -->
 ```
 
 ## Queue Processing
@@ -481,7 +527,7 @@ NIGHT includes several handlers for asynchronous processing of tasks:
     'Subject',
     '<p>Email content</p>',
     null, // Attachments
-    strtotime('+5 minutes') // If suppressed the email is sent instantly using a thread mechanism to execute the queue
+    strtotime('+5 minutes') // If suppressed the email is sent instantly using a promise mechanism to execute the queue
 );
 ```
 
@@ -494,7 +540,7 @@ NIGHT includes several handlers for asynchronous processing of tasks:
     'Notification body',
     'action:view', // Command
     'Notification title',
-    strtotime('now'), // If suppressed the push is sent instantly using a thread mechanism to execute the queue
+    strtotime('now'), // If suppressed the push is sent instantly using a promise mechanism to execute the queue
     ['tag' => 'value'] // Additional tags
 );
 ```
@@ -508,7 +554,7 @@ NIGHT includes several handlers for asynchronous processing of tasks:
     null, // Chat ID (uses default if null)
     'sendMessage', // Method
     ['parse_mode' => 'HTML'], // Parameters
-    strtotime('now') // If suppressed the message is sent instantly using a thread mechanism to execute the queue
+    strtotime('now') // If suppressed the message is sent instantly using a promise mechanism to execute the queue
 );
 ```
 
@@ -520,9 +566,26 @@ NIGHT includes several handlers for asynchronous processing of tasks:
     '+1234567890', // Phone number
     'Hello', // Message
     null, // Tags
-    strtotime('now') // If suppressed the SMS is sent instantly using a thread mechanism to execute the queue
+    strtotime('now') // If suppressed the SMS is sent instantly using a promise mechanism to execute the queue
 );
 ```
+
+### More assynchronous processings
+
+For instant call execution with no memory spend
+
+```php
+async(function() use ($var){ /* do this when the connection finishes */ });
+```
+
+If we need a batch of background processing
+
+```php
+new Promise(function(){ /* do this in background regardless of this session */ });
+```
+
+> **Note:** Both will take no runtime delay to execute. But there are diferences between both methods. Read `index.php` for more information
+
 
 ## Utility Variables
 
@@ -533,9 +596,10 @@ NIGHT includes a set of useful variables on the environment:
 - *GLOBAL* `$_SERVER['DEVELOPMENT']` - Returns `true` if the project is in development mode.
 - *GLOBAL* `$_SERVER['PRODUCTION']` - Returns `true` if the project is in production mode.
 
+
 ## Utility Functions
 
-NIGHT includes a wide range of utility functions in the `globals` class, along with other modules on `base` folder.
+NIGHT includes a wide range of utility functions in the `utils` class, along with other modules on `core` folder.
 
 Some of this functions are:
 
@@ -547,11 +611,11 @@ $response = curlsend(
     'https://api.example.com/endpoint',
     ['param' => 'value'],
     30, // Timeout
-    'json_encode' // Content type - opcional - default is multipart/form-data
+    'json' // Content type - opcional - default is multipart/form-data
 );
 ```
 
-### Tab switching for JS
+### Tab/screen switching for JS (for app experience)
 
 ```js
 switchtab('#my_screen',{'value':1});
@@ -687,7 +751,7 @@ Create a file named `.config.json` in the root directory:
   "dbstring": "mysql:host=localhost;dbname=yourdb;charset=utf8",
   "dbuser": "username",
   "dbpass": "password",
-  "DEVELOPMENT": true,
+  "DEVELOPMENT": true, // auto detected if not set
   "push_project_id": "your-firebase-project-id",
   "push_client_email": "firebase-adminsdk-email@project.iam.gserviceaccount.com",
   "push_private_key_id": "private-key-id",
@@ -706,9 +770,9 @@ Other possible names for the configuration files are:
 - `.config.json` must be on the same directory as the project
 - `config.json` must be on the same directory as the project
 
-> **Note:** The framework is gonna search for the configuration file up to 5 levels up in the directory tree.
+> **Note:** The framework is gonna search for the configuration file up to 5 levels up in the directory tree if needed to.
 
-## Runtime Configuration (also provided by `globals`)
+## Runtime Configuration (also provided by `utils`)
 
 You can also set and get configuration values at runtime:
 
@@ -732,7 +796,7 @@ setitem('myconf', '1');
 let conf = getitem('myconf');
 ```
 
-> To save global configurations with `setitem` use `@` as prefix, e.g. `@myconf`.
+> **Note:** Default will save configurations for the user id (`uid`) authenticated. To save global configurations with `setitem` use `@` as prefix, e.g. `@myconf`.
 
 ---
 

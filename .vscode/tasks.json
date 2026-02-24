@@ -4,7 +4,7 @@
         {
             "label": "Release Android",
             "type": "shell",
-            "command": "${workspaceFolder}/assets/release.sh",
+            "command": "${workspaceFolder}/cordova.sh",
             "args": [
                 "android"
             ],
@@ -23,7 +23,7 @@
         {
             "label": "Release iOS",
             "type": "shell",
-            "command": "${workspaceFolder}/assets/release.sh",
+            "command": "${workspaceFolder}/cordova.sh",
             "args": [
                 "ios",
                 "--no-final-rm"

@@ -14,11 +14,7 @@ cache_*
 wip_*
 *disabled*
 *_template.json
-/assets/node_modules/
-/assets/platforms/
-/assets/plugins/
-/assets/package-lock.json
-/assets/package.json
+/node_modules/
 /apache/letsencrypt/*
 !/apache/letsencrypt/.keep
 /runner/*
