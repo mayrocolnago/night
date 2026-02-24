@@ -22,7 +22,7 @@ class example {
     //This is the database schema. It is useful for auto-deploying your table schema for each module
     //For example, this module uses this specific table. Others will handle their own tables
     public static function database() {
-        return pdo_create(self::$crudTable,[
+        return \db::create(self::$crudTable,[
             "id" => "int NOT NULL AUTO_INCREMENT",
             "title" => "varchar(255) NOT NULL",
             "userid" => "varchar(255) NOT NULL",
@@ -32,7 +32,7 @@ class example {
 
     //This is the main function that will be called when the module is loaded
     public static function index($data=[]):\route { // "route" type will make this function an accessable endpoint
-        exit(str_replace('<title></title>','<title>TO DO - Example</title>',\assets::show(__CLASS__))); //This will call all assets to be loaded for this module
+        exit(\dcl::content(__CLASS__, 'TO DO - Example')); //This will call all assets to be loaded for this module
     }
 
     //This is the CSS for this module. It will bind with the rest of the app dinamically
@@ -46,7 +46,7 @@ class example {
             #todo-list { margin:4rem 0px; padding:1rem 2rem; background-color:rgb(153,153,153,0.2); border-radius:16px; }
             #todo-list li:not(:last-child) { margin-bottom:1rem; }
         </style><?php
-        \globals::css();
+        utils_css();
     }
 
     //This is the core HTML for this module.
@@ -58,8 +58,8 @@ class example {
                     <div class="line">
                         <h1>A Simple TO-DO LIST</h1>
                         <div class="line">
-                            <div style="background-color:<?=((!pdo_isconnected()) ? 'red' : 'green');?>;border-radius:50%;width:6px;height:6px;display:inline-block;margin-right:0.5rem;"></div> 
-                            Database <?=((!pdo_isconnected()) ? 'not ' : '');?>connected
+                            <div style="background-color:<?=((!\db::isconnected()) ? 'red' : 'green');?>;border-radius:50%;width:6px;height:6px;display:inline-block;margin-right:0.5rem;"></div> 
+                            Database <?=((!\db::isconnected()) ? 'not ' : '');?>connected
                             <br style="clear:both;"><br>
                         </div>
                     </div>
@@ -191,7 +191,7 @@ class example {
             }
 
             /* This is an event handler that will be fired every screen loading */
-            $(window).on('screen_onstart',function(state){
+            $(window).on('screen_onready',function(state){
                 /* We figure out if the screen that is loading is actually the home screen */
                 if(state.to !== '#home') return;
                 /* Lets generate an user id if you do not have one for testing purposes */
@@ -202,6 +202,6 @@ class example {
             });
             /* More JS for this module */
         </script><?php
-        \globals::js(); //Include globals JS for screen switching and other stuff
+        utils_js(); //Include globals JS for screen switching and other stuff
     }
 }

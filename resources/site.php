@@ -1,4 +1,9 @@
 <?php
+/***********************************************************************
+ * 
+ * ALL THE CURRENT CONTENT ON /resources/ ARE EXAMPLES ONLY
+ * 
+ ***********************************************************************/
 class site {
 
     public static function index($data):\route { //this will be called if nothing goes after /
@@ -7,7 +12,7 @@ class site {
             <p>
                 <ul>
                     <li><a href="/example">See TO-DO example</a></li>
-                    <li><a href="/app">See dynamic DLC App example</a></li>
+                    <li><a href="/app">See Dynamic Content Loading App example</a></li>
                     <li><a href="/site/pagename">See another page from module</a></li>
                 </ul>
             </p>

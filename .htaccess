@@ -5,6 +5,7 @@ Options +FollowSymLinks
 
 RewriteEngine On
 
+# Always search for index on the directory
 RewriteCond %{REQUEST_URI} ^/$
 RewriteRule ^$ /index.php [L]
 
