@@ -65,18 +65,18 @@ class example {
                         </div>
                     </div>
                     <div class="line">
-                        <button class="btn btn-primary" onclick="todo.create();">Add</button>
-                        <button class="btn btn-primary" onclick="todo.refresh();">Refresh</button>
+                        <button class="btn btn-primary" onclick="todo.create();" data-animate="up">Add</button>
+                        <button class="btn btn-primary" onclick="todo.refresh();" data-animate="right">Refresh</button>
                     </div>
-                    <div class="line">
+                    <div class="line" data-animate="left">
                         <ul id="todo-list"></ul>
                     </div>
                 </div>
                 <div class="footer">
                     <div class="line">
-                        <a href="javascript:void(0);" onclick="switchtab('#thiscode');">See this implementation code</a>
+                        <a href="javascript:void(0);" onclick="switchtab('#thiscode');" data-animate="down">See this implementation code</a>
                         <br style="clear:both;"><br>
-                        <a href="javascript:void(0);" onclick="switchtab('#about');">See more about the framework</a>
+                        <a href="javascript:void(0);" onclick="switchtab('#about');" data-animate="down">See more about the framework</a>
                     </div>
                 </div>
             </div>

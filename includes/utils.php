@@ -941,7 +941,7 @@ if(!function_exists('curlsend')) {
 
       $(window).on('screen_onstart',function(state){ $('.animate').removeClass('animate'); });
       
-      $(window).on("screen_onload",function(state){ 
+      $(window).on("screen_onready",function(state){ 
         if(empty(state.to) || (!($(state.to).length))) return switchtab('#home');
 
         realignfooting(); animate_horizontalscroll(); animation_execute(); 
