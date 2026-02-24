@@ -26,7 +26,6 @@ class tabler {
     }
 
     public static function html() {
-        ?><div id="home" class="screen" style="display:none;"></div><?php
         \desktop::html();
     }
 

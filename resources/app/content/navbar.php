@@ -9,6 +9,7 @@ class navbar {
                 margin: 0;
             }
             .navbar {
+                --tblr-navbar-bg: #222222;
                 border-bottom: 1px solid #e9ecef;
                 padding: 0.5rem 1rem;
             }
@@ -20,7 +21,7 @@ class navbar {
             .nav-link {
                 font-weight: 500;
                 padding: 1rem 1rem;
-                color: #1e293b;
+                color: #e6e6e6;
             }
             
             .nav-link.active {
@@ -32,7 +33,7 @@ class navbar {
 
     public static function html() {
         ?><!-- Navbar -->
-        <header class="navbar navbar-expand-md navbar-light">
+        <header class="navbar navbar-expand-md" data-bs-theme="dark">
             <div class="container-fluid tablerbar-menu-initialize">
                 <a class="navbar-brand" href="#">
                     <img src="/assets/img/logo.png" alt="Logo">

@@ -42,6 +42,7 @@ class example {
             .container { max-width: 600px; margin:auto; padding:1rem; }
             .row,.line { margin:1rem 0; }
             .footer { margin-top:4rem; }
+            a { color: #117dd6; }
 
             #todo-list { margin:4rem 0px; padding:1rem 2rem; background-color:rgb(153,153,153,0.2); border-radius:16px; }
             #todo-list li:not(:last-child) { margin-bottom:1rem; }

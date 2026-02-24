@@ -14,7 +14,7 @@ class app extends \tabler {
     public static function css($data=[]) { ?><style>
 
             :root {
-                --maincolor: #2b11d6;
+                --maincolor: #117dd6;
                 --maincolor2: #f0f0f0;
                 --maincolor3: #262626;
                 --maincolor4: #898989;
