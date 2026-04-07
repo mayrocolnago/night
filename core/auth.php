@@ -143,7 +143,7 @@ abstract class auth {
                 else if(in_array($k,$prohibid) && (!$mask)) $user[$k] = $v;
                 else if(in_array($k,$treats) && $k === 'permission') $user[$k] = array_filter(explode(',',','.($v ?? '')));
                 else if(in_array($k,$treats) && $k === 'active') $user[$k] = (intval($v ?? 0) === 1); 
-                else if(in_array($k,$treats) && $k === 'info') $user[$k] = (($this->maskInfoKeys) ? str_maskmiddle_array($v,[],3) : $v); }
+                else if(in_array($k,$treats) && $k === 'info') $user[$k] = (($this->maskInfoKeys && $mask) ? str_maskmiddle_array($v,[],3) : $v); }
             //Gether specific function data
             if($this->lockRetries ?? false) $user['locked'] = (($info['lockpenalty'] ?? 0) > strtotime('now'));
             if($this->useDeviceAuth ?? false) $user['deviceauthed'] = $this->isverified();
@@ -182,7 +182,8 @@ abstract class auth {
             else if($k === 'active' && ($allowup || @trim($v ?? '') !== '1')) $payload[$k] = ((@trim($v ?? '') === '1') ? '1' : '0');
             else if(!in_array($k,$tfields))
                     if(!empty($tofield = ((is_array($infkeys) && in_array($k,$infkeys)) ? "info" : "config")))
-                        $payload[$tofield][$k] = $v;
+                        if($k !== $this->tokenParam)
+                            $payload[$tofield][$k] = $v;
         //Finally update the user
         return response()->data(\db::query("UPDATE {$this->table} SET ".implode(', ',array_map(function($a){ return "`$a`=:$a"; }, array_keys($payload)))." WHERE id='$id' LIMIT 1",$payload));
     }
