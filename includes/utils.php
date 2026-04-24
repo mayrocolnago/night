@@ -484,7 +484,7 @@ if(!function_exists('curlsend')) {
             continue; }
 
         if(substr($line,0,3) === '```') {
-            if(!$incode && !empty($html .= "<pre style=\"border:1px solid #999;padding:6px 6px;background-color:rgb(153,153,153,0.2);overflow:scroll;\"><code>")) $incode = true;
+            if(!$incode && !empty($html .= "<pre style=\"border:1px solid #999;padding:6px 6px;background-color:rgb(18,18,22,0.9);overflow:scroll;\"><code>")) $incode = true;
             else if(!empty($html .= "</code></pre>\n")) $incode = false;
             continue; }
         
